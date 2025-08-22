@@ -6,7 +6,6 @@
   <title>Raf Atama & Kamera (XLSX ile)</title>
   <!-- Libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.19.3/xlsx.full.min.js"></script>
-  <script src="https://unpkg.com/@zxing/library@0.21.3"></script>
   <style>
     :root{
       --primary:#2563eb; /* mavi */
@@ -101,6 +100,14 @@
     @media (max-width:720px){
       .grid{grid-template-columns: repeat(6, 1fr);}
     }
+
+    /* Kamera katmanları — eski projedeki gibi */
+    #camSheet,#camSheetIOS{position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:9999;display:none}
+    #camBox,#camBoxIOS{position:absolute;left:50%;top:8%;transform:translateX(-50%);width:min(96vw,720px);background:#0b1220;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.25);overflow:hidden;border:1px solid #1f2937}
+    #camHead,#camHeadIOS{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #1f2937;background:#0b1220}
+    #camMount,#camMountIOS{position:relative;width:100%;height:380px;background:#000}
+    #camMount video,#camMountIOS video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+    #camFoot,#camFootIOS{display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;border-top:1px solid #1f2937;background:#0b1220}
   </style>
 </head>
 <body>
@@ -129,7 +136,6 @@
     <div class="grid">
       <div class="card" style="grid-column: span 7;">
         <h3>Kamera Önizleme</h3>
-        <video id="preview" class="hidden" playsinline></video>
         <div id="noCam" class="muted">Kamera kapalı. “Kamerayı Aç” ile başlat.</div>
       </div>
       <div class="card" style="grid-column: span 5;">
@@ -232,6 +238,19 @@
     </div>
   </div>
 
+  <!-- Kamera overlayleri (eski proje ile aynı mantık) -->
+  <div id="camSheet"><div id="camBox">
+    <div id="camHead"><b>Kamera</b><div><button id="camClose" class="btn">Kapat</button></div></div>
+    <div id="camMount"><video id="camVideo" autoplay playsinline muted></video></div>
+    <div id="camFoot"><button id="camStop" class="btn">Durdur</button></div>
+  </div></div>
+
+  <div id="camSheetIOS"><div id="camBoxIOS">
+    <div id="camHeadIOS"><b>Kamera (iOS)</b><div><button id="camCloseIOS" class="btn">Kapat</button></div></div>
+    <div id="camMountIOS"><video id="camVideoIOS" autoplay playsinline muted></video></div>
+    <div id="camFootIOS"><button id="camStopIOS" class="btn">Durdur</button></div>
+  </div></div>
+
 <script>
 // ====== Global State ======
 let workbook = null;
@@ -239,7 +258,6 @@ let sheetName = null;
 let rows = [];            // Array of objects (SheetJS json)
 let headerMap = null;     // column mapping
 let indexByBarcode = new Map();
-let cameraOn = false;
 let bulkMode = false;
 let processedCount = 0;
 let bufferMap = new Map(); // barcode -> {qty, name}
@@ -250,6 +268,7 @@ let recentRafs = JSON.parse(localStorage.getItem("recentRafs") || "[]");
 let changes = [];          // {barkod, urun, oldRaf, newRaf, ts}
 let currentProduct = null; // when normal popup open
 let torchOn = false;
+let LAST_CAM_MODE=null; // 'android' | 'ios' | null
 let currentStream = null;
 
 // Letters A-Z
@@ -333,7 +352,6 @@ function renderRecentRafs(){
 
 // ====== Excel Handling ======
 function detectHeaders(arr){
-  // Try to map common headers (case-insensitive, Turkish tolerant)
   const headers = Object.keys(arr[0]||{});
   const norm = s => String(s||"").toLowerCase().replace(/\s+/g," ");
   let map = { barkod:null, ad:null, fiyat:null, fd:null, marka:null };
@@ -346,7 +364,6 @@ function detectHeaders(arr){
     if(!map.fd     && (n.includes("değ. tar") || n.includes("deg. tar") || n.includes("değiş") || n.includes("fiyat")&&n.includes("tarih"))) map.fd=h;
     if(!map.marka  && (n.includes("marka") || n.includes("raf"))) map.marka=h;
   });
-  // Fallbacks
   if(!map.barkod) map.barkod=headers.find(h=>/bark/i.test(h)) || headers[0];
   if(!map.ad)     map.ad=headers.find(h=>/ad|stok.*ad|ürün/i.test(h)) || headers[1];
   if(!map.fiyat)  map.fiyat=headers.find(h=>/fiyat/i.test(h)) || headers[2];
@@ -384,7 +401,6 @@ function updateSheetCellRaf(barcode, newRaf){
 
 function exportFullXLSX(){
   if(!workbook || !sheetName) return alert("Önce Excel yükleyin.");
-  // Convert rows back to sheet
   const newSheet = XLSX.utils.json_to_sheet(rows, {header: Object.keys(rows[0]||{})});
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, newSheet, sheetName);
@@ -401,70 +417,13 @@ function exportChangesXLSX(){
   XLSX.writeFile(wb, "Degisiklikler.xlsx");
 }
 
-// ====== Camera (ZXing) ======
-const codeReader = new ZXing.BrowserMultiFormatReader();
-async function openCamera(){
-  try{
-    const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
-    const selected = devices[0]?.deviceId;
-    if(!selected) throw new Error("Kamera bulunamadı");
-    $("#noCam").classList.add("hidden");
-    const videoEl = $("#preview");
-    show(videoEl);
-    const previewConfig = { deviceId: selected, facingMode: "environment" };
-    const result = await codeReader.decodeFromVideoDevice(selected, videoEl, (res, err)=>{
-      if(res){
-        onBarcode(res.text);
-      }
-    });
-    cameraOn = true;
-    // Keep stream ref
-    currentStream = videoEl.srcObject;
-    setStatus("Kamera açık");
-  }catch(e){
-    setStatus("Kamera açılamadı");
-    alert("Kamera açılamadı: " + e.message);
-  }
-}
-function closeCamera(){
-  try{
-    codeReader.reset();
-  }catch{}
-  const videoEl=$("#preview");
-  if(videoEl && videoEl.srcObject){
-    videoEl.srcObject.getTracks().forEach(t=>t.stop());
-    videoEl.srcObject=null;
-  }
-  hide(videoEl);
-  $("#noCam").classList.remove("hidden");
-  cameraOn=false;
-  setStatus("Kamera kapalı");
-}
-
-async function toggleTorch(){
-  try{
-    const videoEl=$("#preview");
-    if(!videoEl || !videoEl.srcObject) return;
-    const track = videoEl.srcObject.getVideoTracks()[0];
-    const capabilities = track.getCapabilities?.() || {};
-    if(!capabilities.torch){ alert("Cihaz feneri desteklemiyor."); return; }
-    torchOn = !torchOn;
-    await track.applyConstraints({ advanced:[{torch: torchOn}] });
-  }catch(e){
-    alert("Fener ayarlanamadı: " + e.message);
-  }
-}
-
-// ====== Scan Handler ======
+// ====== Scan Handler (ortak) ======
 function onBarcode(code){
   const now = Date.now();
-  // Debounce / duplicate guard: 1 sec
   if(code===lastScanCode && (now-lastScanTime)<1000) return;
   lastScanTime = now; lastScanCode = code;
 
-  // Success toast
   if(bulkMode){
-    // Add to buffer
     const row = indexByBarcode.get(code);
     const name = row ? (row[headerMap.ad]||"") : "";
     const entry = bufferMap.get(code) || {qty:0, name};
@@ -473,10 +432,8 @@ function onBarcode(code){
     renderBuffer(); updateMetrics(); saveSession();
     toastSuccessOnce();
   }else{
-    // Normal mode: open product modal (price, FD, raf)
     const row = indexByBarcode.get(code);
     if(!row){
-      // In normal mode, show error toast (non-auto close) with retry
       toastErrorStay();
       return;
     }
@@ -493,18 +450,16 @@ function openProductModal(row, code){
   $("#pm_fd").textContent = row[headerMap.fd] ?? "—";
   const raf = (row[headerMap.marka] || "").toString().trim();
   $("#pm_raf").textContent = raf || "—";
-  // Buttons visibility
   $("#pm_btnRafVer").style.display = raf ? "none":"inline-block";
   $("#pm_btnRafDogru").style.display = raf ? "inline-block":"none";
   $("#pm_btnRafDegistir").style.display = "inline-block";
   show($("#productModal"));
-  // Auto reopen camera behaviour handled by closing modal
 }
 function closeProductModal(){
   hide($("#productModal"));
   currentProduct = null;
-  // Auto open camera again if not closed by user
-  if(cameraOn){ /* keep running */ }
+  if(LAST_CAM_MODE==='android'){ if(window.__startCamera) setTimeout(()=>window.__startCamera(true), 150); }
+  else if(LAST_CAM_MODE==='ios'){ if(window.__startIOS) setTimeout(()=>window.__startIOS(true), 150); }
 }
 
 // ====== Raf Modal (Selection) ======
@@ -518,7 +473,6 @@ function openRafModal(pref){
 function closeRafModal(){ hide($("#rafModal")); }
 
 function renderRafGrid(pref){
-  // pref: lastRaf like "A-2"
   const letters = [...LETTERS];
   const numbers = [...NUMBERS];
   let prefLetter = null, prefNum = null;
@@ -526,7 +480,6 @@ function renderRafGrid(pref){
     const [L,N] = pref.split("-");
     prefLetter=L; prefNum=parseInt(N,10);
   }
-  // Letter grid: bring prefLetter to first chip options (and show recent rafs chips)
   const gl = $("#gridLetters"); gl.innerHTML="";
   const orderedLetters = prefLetter ? [prefLetter, ...letters.filter(x=>x!==prefLetter)] : letters;
   orderedLetters.forEach(L=>{
@@ -537,12 +490,10 @@ function renderRafGrid(pref){
     gl.appendChild(b);
   });
 
-  // Numbers: rank by proximity to prefNum (next first), then others, ensure larger far numbers at bottom
   const gn = $("#gridNumbers"); gn.innerHTML="";
   let orderedNums = numbers;
   if(prefNum){
     const candidates = numbers.slice().sort((a,b)=>{
-      // custom score: smaller distance ranks higher; exact next (pref+1) slightly boosted
       const score = n => Math.abs(n - (prefNum+1)) + (n===prefNum+1 ? -0.25 : 0) + (n===10 ? +0.25 : 0);
       return score(a) - score(b);
     });
@@ -556,7 +507,6 @@ function renderRafGrid(pref){
     gn.appendChild(b);
   });
 
-  // Last used chips
   const lub=$("#lastUsedBar"); lub.innerHTML="";
   recentRafs.slice(0,5).forEach(r=>{
     const c=document.createElement("span");
@@ -581,15 +531,11 @@ function commitRafSelection(target){
   const code = target; // barcode
   const val = rafSel.letter && rafSel.number ? `${rafSel.letter}-${rafSel.number}` : null;
   if(!val){ alert("Lütfen harf ve numara seçin."); return false; }
-  // Update product
   if(code==="__BUFFER__"){
-    // apply to all buffered items
     for(const [bc, obj] of bufferMap){
       updateSheetCellRaf(bc, val);
     }
-    // recent rafs
     registerRecentRaf(val);
-    // clear buffer
     bufferMap.clear();
     renderBuffer(); updateMetrics();
     saveSession();
@@ -598,12 +544,10 @@ function commitRafSelection(target){
     registerRecentRaf(val);
   }
   closeRafModal();
-  // camera stays as is
   return true;
 }
 
 function registerRecentRaf(val){
-  // Put val to front, unique
   recentRafs = [val, ...recentRafs.filter(x=>x!==val)];
   if(recentRafs.length>10) recentRafs.length=10;
   renderRecentRafs();
@@ -627,10 +571,12 @@ $("#file").addEventListener("change", async (e)=>{
 });
 
 $("#btnOpenCam").onclick=()=>{
-  openCamera();
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  if(isIOS){ startIOS(true); } else { startCamera(true); }
 };
 $("#btnCloseCam").onclick=()=>{
-  closeCamera();
+  closeCam(); closeIOS();
+  setStatus("Kamera kapalı");
 };
 $("#btnTorch").onclick=()=> toggleTorch();
 
@@ -644,10 +590,9 @@ $("#bulkToggle").addEventListener("change", (e)=>{
 $("#btnRafAta").addEventListener("click", ()=>{
   if(bufferMap.size===0){ alert("Liste boş."); return; }
   openRafModal(lastRaf || (recentRafs[0]||null));
-  // When saved, apply to buffer
   $("#raf_save").onclick=()=>{
     const ok = commitRafSelection("__BUFFER__");
-    if(ok){ lastRaf = $("#rafPreview").textContent; saveSession(); }
+    if(ok){ lastRaf = $("#rafPreview").textContent; saveSession(); processedCount += Array.from(bufferMap.values()).reduce((a,b)=>a+b.qty,0); updateMetrics(); }
   };
 });
 
@@ -656,7 +601,6 @@ $("#btnExportChanges").onclick=()=> exportChangesXLSX();
 
 $("#btnRetry").onclick=()=>{
   hide($("#toastError"));
-  // Camera keeps running; just let user re-aim
 };
 
 // Product modal buttons
@@ -675,7 +619,6 @@ $("#pm_btnRafVer").onclick=()=>{
   };
 };
 $("#pm_btnRafDogru").onclick=()=>{
-  // nothing to change, close
   closeProductModal();
 };
 $("#pm_btnRafDegistir").onclick=()=>{
@@ -692,13 +635,93 @@ $("#pm_btnRafDegistir").onclick=()=>{
   };
 };
 
+// ====== Kamera — Android (eski projeyle aynı mantık) ======
+let __and = {stream:null, scanning:false, starting:false, rafId:null, bdDetector:null};
+async function pickRearDeviceId(){ try{ const devices=await navigator.mediaDevices.enumerateDevices(); const cams=devices.filter(d=>d.kind==='videoinput'); if(!cams.length) return null; let rear=cams.find(d=>/back|rear|environment/i.test(d.label)); return (rear||cams[cams.length-1]).deviceId; }catch(_){ return null; } }
+async function tryGetStream(){ const rearId=await pickRearDeviceId(); const constraints = rearId?{video:{deviceId:{exact:rearId}, width:{ideal:1920}, height:{ideal:1080}, facingMode:{ideal:'environment'}}}:{video:{facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080}}}; return await navigator.mediaDevices.getUserMedia(constraints); }
+async function waitForPlaying(video,timeout=1500){ if(video.readyState>=2) return; await new Promise((res)=>{ let done=false; const ok=()=>{ if(done) return; done=true; cleanup(); res(); }; const tid=setTimeout(ok,timeout); const cleanup=()=>{ video.removeEventListener('loadeddata',ok); clearTimeout(tid); }; video.addEventListener('loadeddata',ok); }); }
+
+function getVideo(){ return document.getElementById('camVideo'); }
+function setBtnBusy(b){ const cam=$("#btnOpenCam"); if(cam) cam.disabled=b; }
+
+async function startCamera(manual=false){
+  if(manual===true) LAST_CAM_MODE='android';
+  if(__and.starting||__and.scanning) return; __and.starting=true; setBtnBusy(true); document.getElementById('camSheet').style.display='block'; stopCamera();
+  const v = getVideo();
+  try{
+    __and.stream=await tryGetStream();
+    currentStream = __and.stream;
+    v.srcObject=__and.stream; await v.play().catch(()=>{}); await waitForPlaying(v,1500);
+  }catch(err){ __and.starting=false; setBtnBusy(false); alert('Kamera başlatılamadı: '+(err?.message||err)); document.getElementById('camSheet').style.display='none'; return; }
+  let canBD='BarcodeDetector' in window;
+  if(canBD){
+    try{ const supported=await BarcodeDetector.getSupportedFormats(); const wanted=['ean-13','upc-a']; const fmts=supported.filter(f=>wanted.includes(f)); __and.bdDetector=new BarcodeDetector({formats: fmts.length?fmts:supported}); }catch(_){ canBD=false; }
+  }
+  __and.scanning=true; __and.starting=false; setBtnBusy(false);
+  const tick=async()=>{
+    if(!__and.scanning) return;
+    try{ const codes=await __and.bdDetector.detect(v); if(codes && codes.length){ let raw=(codes[0].rawValue??codes[0].value??'').toString(); let m=raw.match(/\d{8,}/g); const code=m?m.sort((a,b)=>b.length-a.length)[0]:raw; onDetectedAndroid(code); return; } }catch(_e){}
+    __and.rafId=requestAnimationFrame(tick);
+  };
+  if(canBD) __and.rafId=requestAnimationFrame(tick);
+}
+function onDetectedAndroid(code){
+  if(!code) return; const c=String(code).replace(/\D/g,'');
+  if(c.length<8) return;
+  stopCamera(); document.getElementById('camSheet').style.display='none';
+  onBarcode(c);
+}
+function stopCamera(){ __and.scanning=false; try{ __and.rafId&&cancelAnimationFrame(__and.rafId); __and.rafId=null; }catch(_){} try{ if(__and.stream){ __and.stream.getTracks().forEach(t=>t.stop()); } }catch(_){ } try{ const v=getVideo(); if(v) v.srcObject=null; }catch(_){ } }
+function closeCam(){ stopCamera(); document.getElementById('camSheet').style.display='none'; setBtnBusy(false); }
+
+// Torch
+async function toggleTorch(){
+  try{
+    const stream = currentStream;
+    if(!stream) { alert('Önce kamerayı açın.'); return; }
+    const track = stream.getVideoTracks()[0];
+    const capabilities = track.getCapabilities?.() || {};
+    if(!capabilities.torch){ alert("Cihaz feneri desteklemiyor."); return; }
+    torchOn = !torchOn;
+    await track.applyConstraints({ advanced:[{torch: torchOn}] });
+  }catch(e){
+    alert("Fener ayarlanamadı: " + e.message);
+  }
+}
+
+// ====== Kamera — iOS (eski projeyle aynı mantık) ======
+let __ios = {scanning:false, starting:false, rafId:null, stream:null, bdDetector:null};
+function getVideoIOS(){ return document.getElementById('camVideoIOS'); }
+function closeIOS(){ stopIOS(); document.getElementById('camSheetIOS').style.display='none'; }
+async function getStreamIOS(){ const rear=await pickRearDeviceId(); const constraints = rear?{video:{deviceId:{exact:rear}, width:{ideal:1920}, height:{ideal:1080}, facingMode:{ideal:'environment'}}}:{video:{facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080}}}; return navigator.mediaDevices.getUserMedia(constraints); }
+async function startIOS(manual=false){
+  if(manual===true) LAST_CAM_MODE='ios';
+  if(__ios.starting||__ios.scanning) return; __ios.starting=true; document.getElementById('camSheetIOS').style.display='block'; stopIOS(); const v=getVideoIOS();
+  try{ __ios.stream=await getStreamIOS(); currentStream = __ios.stream; v.srcObject=__ios.stream; await v.play().catch(()=>{}); await waitForPlaying(v,1500); }catch(err){ __ios.starting=false; document.getElementById('camSheetIOS').style.display='none'; alert('Kamera açılamadı (iOS): '+(err?.message||err)); return; }
+  let canBD='BarcodeDetector' in window;
+  if(canBD){ try{ const fmts=await BarcodeDetector.getSupportedFormats(); const use=fmts.filter(f=>['ean-13','upc-a'].includes(f)); __ios.bdDetector=new BarcodeDetector({formats: use.length?use:fmts}); }catch(_){ canBD=false; } }
+  __ios.scanning=true; __ios.starting=false;
+  const off=document.createElement('canvas'); const offctx=off.getContext('2d',{ willReadFrequently:true });
+  const tick=async()=>{
+    if(!__ios.scanning) return;
+    try{ let w=v.videoWidth||640,h=v.videoHeight||480; if(w>0&&h>0){ off.width=w; off.height=h; offctx.drawImage(v,0,0,w,h); if(__ios.bdDetector){ const codes=await __ios.bdDetector.detect(off); if(codes&&codes.length){ let raw=(codes[0].rawValue??codes[0].value??'').toString(); let m=raw.match(/\d{8,}/g); const code=m?m.sort((a,b)=>b.length-a.length)[0]:raw; onDetectedIOS(code); return; } } } }catch(_){ }
+    __ios.rafId=requestAnimationFrame(tick);
+  }; __ios.rafId=requestAnimationFrame(tick);
+}
+function onDetectedIOS(code){
+  if(!code) return; const c=String(code).replace(/\D/g,'');
+  if(c.length<8) return;
+  stopIOS(); document.getElementById('camSheetIOS').style.display='none';
+  onBarcode(c);
+}
+function stopIOS(){ __ios.scanning=false; try{ __ios.rafId&&cancelAnimationFrame(__ios.rafId); __ios.rafId=null; }catch(_){} try{ if(__ios.stream){ __ios.stream.getTracks().forEach(t=>t.stop()); } }catch(_){ } try{ const v=getVideoIOS(); if(v) v.srcObject=null; }catch(_){ } }
+
 // ====== Init ======
 window.addEventListener("load", ()=>{
   loadSession();
-  // default UI states
   $("#btnRafAta").setAttribute("disabled","disabled");
+  setStatus("Kamera kapalı");
 });
-
 </script>
 </body>
 </html>
