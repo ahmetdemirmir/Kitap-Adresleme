@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Raf Atama & Kamera (XLSX ile)</title>
+  <!-- Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.19.3/xlsx.full.min.js"></script>
+  <script src="https://unpkg.com/@zxing/library@0.21.3"></script>
+  <style>
+    :root{
+      --primary:#2563eb; /* mavi */
+      --danger:#ef4444;  /* kırmızı */
+      --success:#16a34a; /* yeşil */
+      --muted:#6b7280;   /* gri */
+      --bg:#0b0f19;
+      --card:#111827;
+      --text:#e5e7eb;
+      --accent:#f59e0b;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background:var(--bg);
+      color:var(--text);
+    }
+    header{
+      position:sticky; top:0; z-index:20;
+      background:rgba(11,15,25,0.8); backdrop-filter: blur(8px);
+      border-bottom:1px solid #1f2937;
+    }
+    .wrap{max-width:1100px; margin:0 auto; padding:16px;}
+    h1{font-size:20px; margin:0 0 8px 0}
+    .toolbar{
+      display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+    }
+    button, .btn{
+      background:var(--primary);
+      color:white; border:none; padding:10px 14px; border-radius:12px;
+      font-weight:600; cursor:pointer;
+    }
+    button.secondary{background:#374151}
+    button.danger{background:var(--danger)}
+    button.success{background:var(--success)}
+    button.warning{background:var(--accent); color:#1f2937}
+    input[type=file]{display:none}
+    label.file{
+      background:#374151; padding:10px 14px; border-radius:12px; cursor:pointer; font-weight:600;
+    }
+    .badge{display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; font-size:12px; background:#1f2937}
+    .grid{display:grid; gap:12px; grid-template-columns: repeat(12, 1fr);}
+    .card{
+      background:var(--card);
+      border:1px solid #1f2937; border-radius:16px; padding:16px;
+    }
+    #preview{width:100%; aspect-ratio:16/9; background:#0b0b0b; border-radius:12px}
+    .hidden{display:none !important}
+    /* Toasts */
+    .toast{
+      position:fixed; left:50%; transform:translateX(-50%);
+      min-width:260px; max-width:92vw; padding:12px 14px;
+      border-radius:12px; font-weight:600; z-index:50;
+      box-shadow:0 10px 30px rgba(0,0,0,.35);
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+    }
+    .toast.success{background:#062911; color:#d1fae5; border:1px solid #065f46; top:16px}
+    .toast.error{background:#2a0b0b; color:#fecaca; border:1px solid #7f1d1d; bottom:16px}
+    .toast .actions button{background:transparent; border:1px solid rgba(255,255,255,.25); padding:6px 10px; border-radius:10px; color:inherit}
+    /* Modals */
+    .modal-backdrop{
+      position:fixed; inset:0; background:rgba(0,0,0,.65); z-index:40;
+      display:flex; align-items:center; justify-content:center; padding:16px;
+    }
+    .modal{background:var(--card); border:1px solid #1f2937; border-radius:16px; width:min(680px,95vw); max-height:88vh; overflow:auto}
+    .modal header{position:sticky; top:0; background:var(--card); padding:14px 16px; border-bottom:1px solid #1f2937}
+    .modal .content{padding:16px}
+    .row{display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap}
+    .row > div{flex:1; min-width:220px}
+    .muted{color:#9ca3af}
+    .big{font-size:26px; font-weight:800; letter-spacing:1px}
+    .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;}
+    .kebab{opacity:.7}
+    .list{display:flex; flex-direction:column; gap:8px}
+    .list .item{display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border:1px dashed #374151; border-radius:12px}
+    .pill{padding:6px 10px; border-radius:999px; background:#1f2937; font-weight:700}
+    .kbd{border:1px solid #374151; padding:2px 6px; border-radius:6px; background:#0b0b0b; font-size:12px}
+    /* Raf grid */
+    .grid-letters{display:grid; grid-template-columns: repeat(auto-fill, minmax(44px,1fr)); gap:8px}
+    .grid-numbers{display:grid; grid-template-columns: repeat(10, minmax(44px,1fr)); gap:8px}
+    .grid-letters button, .grid-numbers button{
+      background:#1f2937; border:1px solid #374151; color:#e5e7eb; border-radius:12px; padding:10px 0; font-size:16px; font-weight:800;
+    }
+    .grid-letters button.active, .grid-numbers button.active{outline:2px solid var(--accent);}
+    .chipbar{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px}
+    .chip{background:#1f2937; border:1px solid #374151; border-radius:999px; padding:6px 10px; font-weight:700; cursor:pointer}
+    .chip.primary{background:#0f172a; border-color:#334155}
+    .foot{display:flex; justify-content:flex-end; gap:8px; padding:12px 16px; border-top:1px solid #1f2937}
+    .switch{display:inline-flex; align-items:center; gap:8px}
+    .switch input{width:44px; height:24px}
+    @media (max-width:720px){
+      .grid{grid-template-columns: repeat(6, 1fr);}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>📦 Raf Atama Sistemi</h1>
+      <div class="toolbar">
+        <label for="file" class="file">Excel Yükle (XLSX)</label>
+        <input id="file" type="file" accept=".xlsx,.xls" />
+        <span class="badge">Durum: <span id="status">Dosya bekleniyor</span></span>
+        <button id="btnOpenCam">Kamerayı Aç</button>
+        <button id="btnCloseCam" class="secondary">Kamerayı Kapat</button>
+        <label class="switch">
+          <input id="bulkToggle" type="checkbox" />
+          <span>Toplu Adresle</span>
+        </label>
+        <button id="btnRafAta" class="warning">Raf Ata (Toplu)</button>
+        <button id="btnSave" class="success">Excel’e Kaydet (XLSX)</button>
+        <button id="btnExportChanges" class="secondary">Değişiklikler.xlsx</button>
+        <button id="btnTorch" class="secondary">Fener</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="grid">
+      <div class="card" style="grid-column: span 7;">
+        <h3>Kamera Önizleme</h3>
+        <video id="preview" class="hidden" playsinline></video>
+        <div id="noCam" class="muted">Kamera kapalı. “Kamerayı Aç” ile başlat.</div>
+      </div>
+      <div class="card" style="grid-column: span 5;">
+        <h3>Adreslenecekler Listesi</h3>
+        <div id="bufferList" class="list"></div>
+        <div class="muted" id="bufferEmpty">Liste boş. Toplu Adresle açıkken okutulan ürünler burada birikir.</div>
+        <div style="margin-top:10px; display:flex; gap:10px; align-items:center">
+          <span class="pill" id="metrics">0 adreslendi • 0 bekliyor</span>
+        </div>
+      </div>
+      <div class="card" style="grid-column: span 12;">
+        <h3>Son Kullanılan Raflar</h3>
+        <div id="recentRafs" class="chipbar"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Ürün Modal (Normal mod) -->
+  <div id="productModal" class="modal-backdrop hidden">
+    <div class="modal">
+      <header>
+        <strong>Ürün Bilgisi</strong>
+      </header>
+      <div class="content">
+        <div class="row">
+          <div>
+            <div class="muted">Barkod</div>
+            <div class="mono big" id="pm_barkod">—</div>
+          </div>
+          <div>
+            <div class="muted">Ürün</div>
+            <div id="pm_urun">—</div>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <div class="muted">Fiyat</div>
+            <div class="big" id="pm_fiyat">—</div>
+          </div>
+          <div>
+            <div class="muted">Fiyat Değişiklik</div>
+            <div class="big" id="pm_fd">—</div>
+          </div>
+        </div>
+        <div class="row">
+          <div style="flex:1">
+            <div class="muted">Raf Kodu</div>
+            <div class="big" id="pm_raf">—</div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:flex-end">
+            <button id="pm_btnRafVer" class="warning">Raf Kodu Ver</button>
+            <button id="pm_btnRafDogru" class="success">Raf Doğru</button>
+            <button id="pm_btnRafDegistir" class="secondary">Değiştir</button>
+          </div>
+        </div>
+      </div>
+      <div class="foot">
+        <button id="pm_close" class="secondary">Kapat</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Raf Seçim Modal -->
+  <div id="rafModal" class="modal-backdrop hidden">
+    <div class="modal">
+      <header>
+        <strong>Raf Kodunu Seç</strong>
+      </header>
+      <div class="content">
+        <div class="chipbar" id="lastUsedBar"></div>
+        <div class="row">
+          <div>
+            <div class="muted">Harf</div>
+            <div id="gridLetters" class="grid-letters"></div>
+          </div>
+          <div>
+            <div class="muted">Numara</div>
+            <div id="gridNumbers" class="grid-numbers"></div>
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          Seçim: <span class="pill" id="rafPreview">—</span>
+        </div>
+      </div>
+      <div class="foot">
+        <button id="raf_cancel" class="secondary">Vazgeç</button>
+        <button id="raf_save" class="btn">Kaydet</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toasts -->
+  <div id="toastSuccess" class="toast success hidden">
+    <span>✅ Okundu</span>
+  </div>
+  <div id="toastError" class="toast error hidden">
+    <span>⛔ Okunamadı</span>
+    <div class="actions">
+      <button id="btnRetry">Tekrar okut</button>
+    </div>
+  </div>
+
+<script>
+// ====== Global State ======
+let workbook = null;
+let sheetName = null;
+let rows = [];            // Array of objects (SheetJS json)
+let headerMap = null;     // column mapping
+let indexByBarcode = new Map();
+let cameraOn = false;
+let bulkMode = false;
+let processedCount = 0;
+let bufferMap = new Map(); // barcode -> {qty, name}
+let lastScanTime = 0;
+let lastScanCode = "";
+let lastRaf = null;        // e.g., "A-2"
+let recentRafs = JSON.parse(localStorage.getItem("recentRafs") || "[]");
+let changes = [];          // {barkod, urun, oldRaf, newRaf, ts}
+let currentProduct = null; // when normal popup open
+let torchOn = false;
+let currentStream = null;
+
+// Letters A-Z
+const LETTERS = Array.from({length:26}, (_,i)=>String.fromCharCode(65+i));
+const NUMBERS = Array.from({length:10}, (_,i)=>i+1);
+
+// ====== Helpers ======
+const $ = sel => document.querySelector(sel);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
+
+function setStatus(t){ $("#status").textContent = t; }
+function fmtTS(d=new Date()){
+  const pad=n=>String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+function show(el){ el.classList.remove("hidden"); }
+function hide(el){ el.classList.add("hidden"); }
+
+function toastSuccessOnce(){
+  const el=$("#toastSuccess"); show(el);
+  setTimeout(()=>hide(el), 1000);
+}
+function toastErrorStay(){
+  const el=$("#toastError"); show(el);
+}
+function hideToasts(){ hide($("#toastSuccess")); hide($("#toastError")); }
+
+function updateMetrics(){
+  const waiting = Array.from(bufferMap.values()).reduce((a,b)=>a+b.qty,0);
+  $("#metrics").textContent = `${processedCount} adreslendi • ${waiting} bekliyor`;
+}
+function renderBuffer(){
+  const cont = $("#bufferList");
+  cont.innerHTML = "";
+  if(bufferMap.size===0){ $("#bufferEmpty").style.display="block"; return; }
+  $("#bufferEmpty").style.display="none";
+  for(const [bc, obj] of bufferMap){
+    const div = document.createElement("div");
+    div.className="item";
+    div.innerHTML = `<div><div class="mono">${bc}</div><div class="muted">${obj.name||""}</div></div>
+    <div style="display:flex; gap:8px; align-items:center">
+      <button class="secondary btnMinus" data-bc="${bc}">-</button>
+      <span class="pill">${obj.qty}</span>
+      <button class="secondary btnPlus" data-bc="${bc}">+</button>
+      <button class="danger btnDel" data-bc="${bc}">Sil</button>
+    </div>`;
+    cont.appendChild(div);
+  }
+  cont.querySelectorAll(".btnMinus").forEach(b=>b.onclick=()=>{ const bc=b.dataset.bc; const o=bufferMap.get(bc); if(!o) return; o.qty=Math.max(0,o.qty-1); if(o.qty===0) bufferMap.delete(bc); renderBuffer(); updateMetrics(); saveSession(); });
+  cont.querySelectorAll(".btnPlus").forEach(b=>b.onclick=()=>{ const bc=b.dataset.bc; const o=bufferMap.get(bc); if(!o) return; o.qty+=1; renderBuffer(); updateMetrics(); saveSession(); });
+  cont.querySelectorAll(".btnDel").forEach(b=>b.onclick=()=>{ bufferMap.delete(b.dataset.bc); renderBuffer(); updateMetrics(); saveSession(); });
+}
+
+function saveSession(){
+  localStorage.setItem("bufferMap", JSON.stringify(Array.from(bufferMap.entries())));
+  localStorage.setItem("recentRafs", JSON.stringify(recentRafs.slice(0,8)));
+  localStorage.setItem("changes", JSON.stringify(changes));
+  localStorage.setItem("lastRaf", JSON.stringify(lastRaf));
+}
+function loadSession(){
+  try{
+    const bm = JSON.parse(localStorage.getItem("bufferMap")||"[]");
+    bufferMap = new Map(bm);
+    changes = JSON.parse(localStorage.getItem("changes")||"[]");
+    lastRaf = JSON.parse(localStorage.getItem("lastRaf")||"null");
+  }catch{}
+  renderBuffer(); updateMetrics(); renderRecentRafs();
+}
+
+function renderRecentRafs(){
+  const cont=$("#recentRafs");
+  cont.innerHTML="";
+  recentRafs.forEach(r=>{
+    const chip=document.createElement("button");
+    chip.className="chip primary";
+    chip.textContent=r;
+    chip.onclick=()=> applyRafToBuffer(r);
+    cont.appendChild(chip);
+  });
+}
+
+// ====== Excel Handling ======
+function detectHeaders(arr){
+  // Try to map common headers (case-insensitive, Turkish tolerant)
+  const headers = Object.keys(arr[0]||{});
+  const norm = s => String(s||"").toLowerCase().replace(/\s+/g," ");
+  let map = { barkod:null, ad:null, fiyat:null, fd:null, marka:null };
+
+  headers.forEach(h=>{
+    const n = norm(h);
+    if(!map.barkod && (n.includes("barkod") || n.includes("barcode") || n==="barkodu")) map.barkod=h;
+    if(!map.ad     && (n.includes("stok adı") || n.includes("urun") || n.includes("stok adi") || n.includes("adı"))) map.ad=h;
+    if(!map.fiyat  && (n.includes("satış fiyatı 1") || n.includes("satis fiyati 1") || n.includes("fiyat"))) map.fiyat=h;
+    if(!map.fd     && (n.includes("değ. tar") || n.includes("deg. tar") || n.includes("değiş") || n.includes("fiyat")&&n.includes("tarih"))) map.fd=h;
+    if(!map.marka  && (n.includes("marka") || n.includes("raf"))) map.marka=h;
+  });
+  // Fallbacks
+  if(!map.barkod) map.barkod=headers.find(h=>/bark/i.test(h)) || headers[0];
+  if(!map.ad)     map.ad=headers.find(h=>/ad|stok.*ad|ürün/i.test(h)) || headers[1];
+  if(!map.fiyat)  map.fiyat=headers.find(h=>/fiyat/i.test(h)) || headers[2];
+  if(!map.fd)     map.fd=headers.find(h=>/tarih|değ|deg/i.test(h)) || headers[3];
+  if(!map.marka)  map.marka=headers.find(h=>/marka|raf/i.test(h)) || headers[4];
+  return map;
+}
+
+function buildIndex(){
+  indexByBarcode.clear();
+  for(const r of rows){
+    const b = String(r[headerMap.barkod]||"").trim();
+    if(b) indexByBarcode.set(b, r);
+  }
+}
+
+function updateSheetCellRaf(barcode, newRaf){
+  const r = indexByBarcode.get(barcode);
+  if(!r) return false;
+  const old = r[headerMap.marka] || "";
+  if(String(old)===String(newRaf)) return false;
+  r[headerMap.marka] = newRaf;
+  changes.push({
+    barkod: barcode,
+    urun: r[headerMap.ad] || "",
+    oldRaf: old,
+    newRaf: newRaf,
+    ts: fmtTS()
+  });
+  processedCount++;
+  updateMetrics();
+  saveSession();
+  return true;
+}
+
+function exportFullXLSX(){
+  if(!workbook || !sheetName) return alert("Önce Excel yükleyin.");
+  // Convert rows back to sheet
+  const newSheet = XLSX.utils.json_to_sheet(rows, {header: Object.keys(rows[0]||{})});
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, newSheet, sheetName);
+  XLSX.writeFile(wb, "guncel.xlsx");
+}
+
+function exportChangesXLSX(){
+  if(changes.length===0) return alert("Değişiklik bulunmuyor.");
+  const ws = XLSX.utils.json_to_sheet(changes.map(c=>({
+    Barkod:c.barkod, "Ürün":c.urun, "Eski Raf":c.oldRaf, "Yeni Raf":c.newRaf, "Tarih/Saat":c.ts
+  })));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Degisiklikler");
+  XLSX.writeFile(wb, "Degisiklikler.xlsx");
+}
+
+// ====== Camera (ZXing) ======
+const codeReader = new ZXing.BrowserMultiFormatReader();
+async function openCamera(){
+  try{
+    const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
+    const selected = devices[0]?.deviceId;
+    if(!selected) throw new Error("Kamera bulunamadı");
+    $("#noCam").classList.add("hidden");
+    const videoEl = $("#preview");
+    show(videoEl);
+    const previewConfig = { deviceId: selected, facingMode: "environment" };
+    const result = await codeReader.decodeFromVideoDevice(selected, videoEl, (res, err)=>{
+      if(res){
+        onBarcode(res.text);
+      }
+    });
+    cameraOn = true;
+    // Keep stream ref
+    currentStream = videoEl.srcObject;
+    setStatus("Kamera açık");
+  }catch(e){
+    setStatus("Kamera açılamadı");
+    alert("Kamera açılamadı: " + e.message);
+  }
+}
+function closeCamera(){
+  try{
+    codeReader.reset();
+  }catch{}
+  const videoEl=$("#preview");
+  if(videoEl && videoEl.srcObject){
+    videoEl.srcObject.getTracks().forEach(t=>t.stop());
+    videoEl.srcObject=null;
+  }
+  hide(videoEl);
+  $("#noCam").classList.remove("hidden");
+  cameraOn=false;
+  setStatus("Kamera kapalı");
+}
+
+async function toggleTorch(){
+  try{
+    const videoEl=$("#preview");
+    if(!videoEl || !videoEl.srcObject) return;
+    const track = videoEl.srcObject.getVideoTracks()[0];
+    const capabilities = track.getCapabilities?.() || {};
+    if(!capabilities.torch){ alert("Cihaz feneri desteklemiyor."); return; }
+    torchOn = !torchOn;
+    await track.applyConstraints({ advanced:[{torch: torchOn}] });
+  }catch(e){
+    alert("Fener ayarlanamadı: " + e.message);
+  }
+}
+
+// ====== Scan Handler ======
+function onBarcode(code){
+  const now = Date.now();
+  // Debounce / duplicate guard: 1 sec
+  if(code===lastScanCode && (now-lastScanTime)<1000) return;
+  lastScanTime = now; lastScanCode = code;
+
+  // Success toast
+  if(bulkMode){
+    // Add to buffer
+    const row = indexByBarcode.get(code);
+    const name = row ? (row[headerMap.ad]||"") : "";
+    const entry = bufferMap.get(code) || {qty:0, name};
+    entry.qty += 1;
+    bufferMap.set(code, entry);
+    renderBuffer(); updateMetrics(); saveSession();
+    toastSuccessOnce();
+  }else{
+    // Normal mode: open product modal (price, FD, raf)
+    const row = indexByBarcode.get(code);
+    if(!row){
+      // In normal mode, show error toast (non-auto close) with retry
+      toastErrorStay();
+      return;
+    }
+    currentProduct = { code, row };
+    openProductModal(row, code);
+  }
+}
+
+// ====== Product Modal ======
+function openProductModal(row, code){
+  $("#pm_barkod").textContent = code;
+  $("#pm_urun").textContent = row[headerMap.ad] || "—";
+  $("#pm_fiyat").textContent = row[headerMap.fiyat] ?? "—";
+  $("#pm_fd").textContent = row[headerMap.fd] ?? "—";
+  const raf = (row[headerMap.marka] || "").toString().trim();
+  $("#pm_raf").textContent = raf || "—";
+  // Buttons visibility
+  $("#pm_btnRafVer").style.display = raf ? "none":"inline-block";
+  $("#pm_btnRafDogru").style.display = raf ? "inline-block":"none";
+  $("#pm_btnRafDegistir").style.display = "inline-block";
+  show($("#productModal"));
+  // Auto reopen camera behaviour handled by closing modal
+}
+function closeProductModal(){
+  hide($("#productModal"));
+  currentProduct = null;
+  // Auto open camera again if not closed by user
+  if(cameraOn){ /* keep running */ }
+}
+
+// ====== Raf Modal (Selection) ======
+let rafSel = {letter:null, number:null};
+function openRafModal(pref){
+  rafSel = {letter:null, number:null};
+  renderRafGrid(pref);
+  $("#rafPreview").textContent="—";
+  show($("#rafModal"));
+}
+function closeRafModal(){ hide($("#rafModal")); }
+
+function renderRafGrid(pref){
+  // pref: lastRaf like "A-2"
+  const letters = [...LETTERS];
+  const numbers = [...NUMBERS];
+  let prefLetter = null, prefNum = null;
+  if(pref && /^[A-Z]-\d+$/.test(pref)){
+    const [L,N] = pref.split("-");
+    prefLetter=L; prefNum=parseInt(N,10);
+  }
+  // Letter grid: bring prefLetter to first chip options (and show recent rafs chips)
+  const gl = $("#gridLetters"); gl.innerHTML="";
+  const orderedLetters = prefLetter ? [prefLetter, ...letters.filter(x=>x!==prefLetter)] : letters;
+  orderedLetters.forEach(L=>{
+    const b=document.createElement("button");
+    b.textContent=L;
+    if(L===prefLetter) b.classList.add("active");
+    b.onclick=()=>{ rafSel.letter=L; updateRafPreview(); $$("#gridLetters button").forEach(x=>x.classList.remove("active")); b.classList.add("active"); };
+    gl.appendChild(b);
+  });
+
+  // Numbers: rank by proximity to prefNum (next first), then others, ensure larger far numbers at bottom
+  const gn = $("#gridNumbers"); gn.innerHTML="";
+  let orderedNums = numbers;
+  if(prefNum){
+    const candidates = numbers.slice().sort((a,b)=>{
+      // custom score: smaller distance ranks higher; exact next (pref+1) slightly boosted
+      const score = n => Math.abs(n - (prefNum+1)) + (n===prefNum+1 ? -0.25 : 0) + (n===10 ? +0.25 : 0);
+      return score(a) - score(b);
+    });
+    orderedNums = candidates;
+  }
+  orderedNums.forEach(N=>{
+    const b=document.createElement("button");
+    b.textContent=N;
+    if(N===prefNum+1) b.classList.add("active");
+    b.onclick=()=>{ rafSel.number=N; updateRafPreview(); $$("#gridNumbers button").forEach(x=>x.classList.remove("active")); b.classList.add("active"); };
+    gn.appendChild(b);
+  });
+
+  // Last used chips
+  const lub=$("#lastUsedBar"); lub.innerHTML="";
+  recentRafs.slice(0,5).forEach(r=>{
+    const c=document.createElement("span");
+    c.className="chip";
+    c.textContent=r;
+    c.onclick=()=>{ rafSel = parseRaf(r); updateRafPreview(true); };
+    lub.appendChild(c);
+  });
+}
+
+function parseRaf(s){
+  const m = (s||"").match(/^([A-Z])-(\d{1,2})$/);
+  if(!m) return {letter:null, number:null};
+  return {letter:m[1], number:parseInt(m[2],10)};
+}
+function updateRafPreview(force){
+  const text = rafSel.letter && rafSel.number ? `${rafSel.letter}-${rafSel.number}` : "—";
+  $("#rafPreview").textContent=text;
+}
+
+function commitRafSelection(target){
+  const code = target; // barcode
+  const val = rafSel.letter && rafSel.number ? `${rafSel.letter}-${rafSel.number}` : null;
+  if(!val){ alert("Lütfen harf ve numara seçin."); return false; }
+  // Update product
+  if(code==="__BUFFER__"){
+    // apply to all buffered items
+    for(const [bc, obj] of bufferMap){
+      updateSheetCellRaf(bc, val);
+    }
+    // recent rafs
+    registerRecentRaf(val);
+    // clear buffer
+    bufferMap.clear();
+    renderBuffer(); updateMetrics();
+    saveSession();
+  }else{
+    updateSheetCellRaf(code, val);
+    registerRecentRaf(val);
+  }
+  closeRafModal();
+  // camera stays as is
+  return true;
+}
+
+function registerRecentRaf(val){
+  // Put val to front, unique
+  recentRafs = [val, ...recentRafs.filter(x=>x!==val)];
+  if(recentRafs.length>10) recentRafs.length=10;
+  renderRecentRafs();
+  saveSession();
+}
+
+// ====== Events ======
+$("#file").addEventListener("change", async (e)=>{
+  const f = e.target.files?.[0];
+  if(!f) return;
+  setStatus("Excel okunuyor...");
+  const data = await f.arrayBuffer();
+  workbook = XLSX.read(data);
+  sheetName = workbook.SheetNames[0];
+  const sheet = workbook.Sheets[sheetName];
+  rows = XLSX.utils.sheet_to_json(sheet, {defval:""});
+  if(rows.length===0){ alert("Sayfa boş görünüyor."); setStatus("Sayfa boş"); return; }
+  headerMap = detectHeaders(rows);
+  buildIndex();
+  setStatus(`Excel yüklendi • Sayfa: ${sheetName} • Satır: ${rows.length}`);
+});
+
+$("#btnOpenCam").onclick=()=>{
+  openCamera();
+};
+$("#btnCloseCam").onclick=()=>{
+  closeCamera();
+};
+$("#btnTorch").onclick=()=> toggleTorch();
+
+$("#bulkToggle").addEventListener("change", (e)=>{
+  bulkMode = e.target.checked;
+  const el=$("#btnRafAta");
+  if(bulkMode){ el.removeAttribute("disabled"); }
+  else{ el.setAttribute("disabled","disabled"); }
+});
+
+$("#btnRafAta").addEventListener("click", ()=>{
+  if(bufferMap.size===0){ alert("Liste boş."); return; }
+  openRafModal(lastRaf || (recentRafs[0]||null));
+  // When saved, apply to buffer
+  $("#raf_save").onclick=()=>{
+    const ok = commitRafSelection("__BUFFER__");
+    if(ok){ lastRaf = $("#rafPreview").textContent; saveSession(); }
+  };
+});
+
+$("#btnSave").onclick=()=> exportFullXLSX();
+$("#btnExportChanges").onclick=()=> exportChangesXLSX();
+
+$("#btnRetry").onclick=()=>{
+  hide($("#toastError"));
+  // Camera keeps running; just let user re-aim
+};
+
+// Product modal buttons
+$("#pm_close").onclick=()=> closeProductModal();
+$("#pm_btnRafVer").onclick=()=>{
+  if(!currentProduct) return;
+  openRafModal(lastRaf || (recentRafs[0]||null));
+  $("#raf_save").onclick=()=>{
+    const ok = commitRafSelection(currentProduct.code);
+    if(ok){
+      $("#pm_raf").textContent = $("#rafPreview").textContent;
+      lastRaf = $("#rafPreview").textContent;
+      saveSession();
+      closeProductModal();
+    }
+  };
+};
+$("#pm_btnRafDogru").onclick=()=>{
+  // nothing to change, close
+  closeProductModal();
+};
+$("#pm_btnRafDegistir").onclick=()=>{
+  if(!currentProduct) return;
+  openRafModal(lastRaf || (recentRafs[0]||null));
+  $("#raf_save").onclick=()=>{
+    const ok = commitRafSelection(currentProduct.code);
+    if(ok){
+      $("#pm_raf").textContent = $("#rafPreview").textContent;
+      lastRaf = $("#rafPreview").textContent;
+      saveSession();
+      closeProductModal();
+    }
+  };
+};
+
+// ====== Init ======
+window.addEventListener("load", ()=>{
+  loadSession();
+  // default UI states
+  $("#btnRafAta").setAttribute("disabled","disabled");
+});
+
+</script>
+</body>
+</html>
