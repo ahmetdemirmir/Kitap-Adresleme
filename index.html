@@ -6,42 +6,13 @@
   <title>Raf Atama Sistemi</title>
   <!-- Correct XLSX CDN -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <style>
-    body{font-family:Arial, sans-serif; background:#0b0f19; color:#e5e7eb; margin:0; padding:0;}
-    header{background:#111827; padding:10px; position:sticky; top:0; z-index:1000;}
-    .toolbar{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
-    button{background:#2563eb; color:#fff; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:600;}
-    button.secondary{background:#374151} button.success{background:#16a34a} button.warning{background:#f59e0b; color:#111827}
-    label.file{background:#374151; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:600; color:#fff}
-    input[type=file]{display:none}
-    .badge{background:#1f2937; padding:6px 10px; border-radius:999px; font-size:12px;}
-    .card{background:#111827; margin:10px; padding:16px; border-radius:8px;}
-  </style>
 </head>
 <body>
-  <header>
-    <div class="toolbar">
-      <label for="file" class="file">Excel Yükle (XLSX)</label>
-      <input id="file" type="file" accept=".xlsx,.xls" />
-      <span class="badge">Durum: <span id="status">Dosya bekleniyor</span></span>
-      <button id="btnOpenCam">Kamerayı Aç</button>
-      <button id="btnCloseCam" class="secondary">Kamerayı Kapat</button>
-      <button id="btnSave" class="success">Excel’e Kaydet (XLSX)</button>
-      <button id="btnExportChanges" class="secondary">Değişiklikler.xlsx</button>
-    </div>
-  </header>
-  <main>
-    <div class="card">
-      <h3>Kamera Önizleme</h3>
-      <div id="noCam">Kamera kapalı. “Kamerayı Aç” ile başlat.</div>
-    </div>
-    <div class="card">
-      <h3>Son Kullanılan Raflar</h3>
-      <div id="recentRafs"></div>
-    </div>
-  </main>
+  <h1>📦 Raf Atama Sistemi</h1>
+  <label for="file">Excel Yükle (XLSX)</label>
+  <input id="file" type="file" accept=".xlsx,.xls" />
+  <p>Durum: <span id="status">Dosya bekleniyor</span></p>
   <script>
-    // Basit Excel yükleme testi
     document.getElementById("file").addEventListener("change", async (e)=>{
       const f = e.target.files?.[0];
       if(!f){ document.getElementById("status").textContent = "Dosya bekleniyor"; return; }
