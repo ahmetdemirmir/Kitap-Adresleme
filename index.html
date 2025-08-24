@@ -22,8 +22,7 @@
   #camModal .head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#0b1220;color:#fff}
   #camModal .body{position:relative; flex:1; background:#000}
   #camModal video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-  #overlayFrame::after{content:"";position:absolute;left:10%;right:10%;top:18%;height:64%;
-    border:3px dashed #10b981;border-radius:1rem;box-shadow:0 0 0 9999px rgba(0,0,0,.35) inset;pointer-events:none}
+  #overlayFrame::after{content:"";position:absolute;left:10%;right:10%;top:18%;height:64%;border:3px dashed #10b981;border-radius:1rem;box-shadow:0 0 0 9999px rgba(0,0,0,.35) inset;pointer-events:none}
 
   /* Raf seçim – büyük butonlar */
   .shelf-btn{padding:.6rem .9rem;border-radius:.75rem;background:#f1f5f9}
@@ -249,7 +248,6 @@ function feedbackOK(){ haptic(40); tone(1600,130,'square',0.45); setTimeout(()=>
 function feedbackERR(){ haptic([70,90,70]); tone(220,260,'sawtooth',0.5); }
 
 /* ==== Sütun eşleme (raf = Modeli) ==== */
-/* DİKKAT: eşlemede trim’li metinle eşleş, ama map’e ORİJİNAL başlığı yaz (trailing space dahil) */
 const COLS = {
   barcode: [/^barkod$/i, /^barkod ?no$/i, /^ean$/i, /^ean-?13$/i, /^barcode$/i],
   name: [/^stok ?adı$/i, /^ürün ?adı$/i, /^stok ?adi$/i, /^product$/i, /^isim$/i],
@@ -344,6 +342,12 @@ function indexCore(rows2d, headers, map){
 function enableSaves(){ btnSaveAll.disabled = state.rows.length===0; btnSaveChanges.disabled = state.rows.length===0; }
 
 /* ==== Tek noktadan RAF atama ==== */
+function getShelfHeader(){
+  if(state.map.shelf) return state.map.shelf; // orijinal başlık (boşluk dâhil)
+  // Yedek: headers içinde 'modeli' eşleşmesi ara
+  const hit = state.headers.find(h=> String(h).trim().toLowerCase()==='modeli');
+  return hit || 'Modeli';
+}
 function applyShelfTo(barcode, shelf){
   barcode = pad13(barcode);
   const r = state.byBarcode.get(barcode); if(!r) return;
@@ -351,8 +355,10 @@ function applyShelfTo(barcode, shelf){
   if(old === shelf) return;
 
   r.shelf = shelf;
-  // __raw içinde ORİJİNAL başlık anahtarıyla güncelle
-  if(state.map.shelf){ r.__raw[state.map.shelf] = shelf; }
+
+  // __raw içinde ORİJİNAL/Yedek başlıkla güncelle
+  const shelfKey = getShelfHeader();
+  r.__raw[shelfKey] = shelf;
 
   pushRecentShelf(shelf);
 
@@ -386,7 +392,7 @@ function openProduct(barcode){
   dlgProduct.showModal();
 }
 
-/* ==== Raf seçimi (A–H, 1–50) + Son Kullanılanlar davranışı ==== */
+/* ==== Raf seçimi (A–H, 1–50) + Son Kullanılanlar ==== */
 function buildShelfUI(){
   // Son kullanılanlar
   const recent=document.getElementById('recentShelves'); recent.innerHTML='';
@@ -395,47 +401,30 @@ function buildShelfUI(){
     b.onclick=()=>{
       const [L,N]=c.split('-');
       dlgShelf.dataset.letter=L; dlgShelf.dataset.number=N;
-      // highlight eşitle
       highlightLetter(L); highlightNumber(N);
     };
     recent.appendChild(b);
   }
-
   // Harfler
   const letters = Array.from({length:8},(_,i)=> String.fromCharCode(65+i)); // A..H
   const Lwrap=document.getElementById('letters'); Lwrap.innerHTML='';
   for(const L of letters){
     const b=document.createElement('button'); b.className='shelf-btn'; b.textContent=L;
-    b.onclick=()=> { dlgShelf.dataset.letter=L; highlightLetter(L, b); };
+    b.onclick=()=> { dlgShelf.dataset.letter=L; highlightLetter(L,b); };
     Lwrap.appendChild(b);
   }
-
   // Numaralar
   const Nwrap=document.getElementById('nums'); Nwrap.innerHTML='';
   for(let i=1;i<=50;i++){
     const b=document.createElement('button'); b.className='shelf-btn'; b.textContent=String(i);
-    b.onclick=()=> { dlgShelf.dataset.number=String(i); highlightNumber(String(i), b); };
+    b.onclick=()=> { dlgShelf.dataset.number=String(i); highlightNumber(String(i),b); };
     Nwrap.appendChild(b);
   }
-
-  // Eğer dataset’te değer varsa açılışta highlight et
   if(dlgShelf.dataset.letter) highlightLetter(dlgShelf.dataset.letter);
   if(dlgShelf.dataset.number) highlightNumber(dlgShelf.dataset.number);
 }
-function highlightLetter(L, btn){
-  const all = document.querySelectorAll('#letters .shelf-btn'); all.forEach(x=> x.classList.remove('active'));
-  if(btn){ btn.classList.add('active'); }
-  else{
-    for(const x of all){ if(x.textContent===L){ x.classList.add('active'); break; } }
-  }
-}
-function highlightNumber(N, btn){
-  const all = document.querySelectorAll('#nums .shelf-btn'); all.forEach(x=> x.classList.remove('active'));
-  if(btn){ btn.classList.add('active'); }
-  else{
-    for(const x of all){ if(x.textContent===N){ x.classList.add('active'); break; } }
-  }
-}
+function highlightLetter(L, btn){ const all=document.querySelectorAll('#letters .shelf-btn'); all.forEach(x=>x.classList.remove('active')); if(btn){btn.classList.add('active');} else { for(const x of all){ if(x.textContent===L){ x.classList.add('active'); break; } } } }
+function highlightNumber(N, btn){ const all=document.querySelectorAll('#nums .shelf-btn'); all.forEach(x=>x.classList.remove('active')); if(btn){btn.classList.add('active');} else { for(const x of all){ if(x.textContent===N){ x.classList.add('active'); break; } } } }
 function openShelfDialog(){ buildShelfUI(); dlgShelf.showModal(); }
 document.getElementById('btnShelfApply').addEventListener('click', ()=>{
   const L=dlgShelf.dataset.letter, N=dlgShelf.dataset.number;
@@ -479,7 +468,7 @@ btnTorch.addEventListener('click', async ()=>{ if(!track) return; try{ torchOn=!
 function showCamBanner(msg, ok=true){
   camBanner.textContent = msg;
   camBanner.className = ok? 'ok' : 'err';
-  camBanner.id='camBanner'; // className reset sonrası id koru
+  camBanner.id='camBanner';
   camBanner.style.display='block';
   setTimeout(()=> camBanner.style.display='none', 1000);
 }
@@ -505,26 +494,31 @@ function handleScan(value){
   const r = state.byBarcode.get(ean13);
   if(!r){ showCamBanner('⛔ ERP’de yok', false); feedbackERR(); return; }
   feedbackOK();
+
   if(bulkChk.checked){
     state.bulkItems.add(r.barcode);
     bulkCount.classList.remove('hidden'); bulkCount.textContent = String(state.bulkItems.size);
     showCamBanner('✅ Okundu', true);
   } else {
-    showCamBanner('✅ Okundu', true);
-    openProduct(r.barcode);
+    // TEKLI MOD: raf boşsa direkt adresle; varsa eskisi gibi ürün popup
+    if(!r.shelf){ state.selectedProduct = r; openShelfDialog(); }
+    else { showCamBanner('✅ Okundu', true); openProduct(r.barcode); }
   }
 }
 
 /* ==== Kaydetme ==== */
 function buildFullWorkbook(){
-  // Orijinal başlık anahtarları üzerinden yaz
+  // Başlığı garanti et
+  const shelfKey = getShelfHeader();
+  const headersOut = Array.from(new Set([...state.headers, shelfKey]));
   const rows = state.rows.map(r=>{
     const o = Object.assign({}, r.__raw);
-    if(state.map.shelf){ o[state.map.shelf] = r.shelf || ''; }
+    o[shelfKey] = r.shelf || '';
     return o;
   });
-  const ws=XLSX.utils.json_to_sheet(rows, {skipHeader:false});
-  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Veri'); return wb;
+  // XLSX utils json_to_sheet sırayı korumayabilir; header’ı zorlayalım
+  const ws = XLSX.utils.json_to_sheet(rows, {header: headersOut, skipHeader:false});
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Veri'); return wb;
 }
 function buildChangesWorkbook(){
   const rows=[]; for(const [bc,ch] of state.changes.entries()){
