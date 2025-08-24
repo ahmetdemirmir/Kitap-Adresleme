@@ -1,34 +1,38 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Demir Kırtasiye • Raf Adresleme</title>
-  <!-- UI -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
-  <!-- XLSX (GERİ EKLENDİ) + Day.js -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/customParseFormat.js"></script>
-  <script>dayjs.extend(dayjs_plugin_customParseFormat)</script>
-  <style>
-    :root{ --brand:#E11D48; --brand2:#1D4ED8; }
-    .brand-gradient{background:linear-gradient(90deg,var(--brand),var(--brand2));}
-    dialog::backdrop{ background:rgba(0,0,0,.55); }
-    dialog{ border:none; border-radius:1rem; padding:0; }
-    #toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:1rem; z-index:9999; display:none; }
-    /* Kamera modal */
-    #camModal .wrap{width:min(92vw,520px); height:min(80vh,760px); background:#111; border-radius:1rem; overflow:hidden; display:flex; flex-direction:column}
-    #camModal .head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#0b1220;color:#fff}
-    #camModal .body{position:relative; flex:1; background:#000}
-    #camModal video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-    #overlayFrame::after{content:"";position:absolute;left:10%;right:10%;top:18%;height:64%;border:3px dashed #10b981;border-radius:1rem;box-shadow:0 0 0 9999px rgba(0,0,0,.35) inset;pointer-events:none}
-    /* Raf seçim – büyük butonlar */
-    .shelf-btn{padding:.6rem .9rem;border-radius:.75rem;background:#f1f5f9}
-    .shelf-btn.active{background:#0ea5e9;color:#fff}
-    .nums-wrap{max-height:180px;overflow-y:auto}
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Demir Kırtasiye • Raf Adresleme</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/customParseFormat.js"></script>
+<script>dayjs.extend(dayjs_plugin_customParseFormat)</script>
+<style>
+  :root{ --brand:#E11D48; --brand2:#1D4ED8; }
+  .brand-gradient{background:linear-gradient(90deg,var(--brand),var(--brand2));}
+  dialog::backdrop{ background:rgba(0,0,0,.55); }
+  dialog{ border:none; border-radius:1rem; padding:0; }
+  #toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:1rem; z-index:9999; display:none; }
+  /* Kamera modal */
+  #camModal .wrap{width:min(92vw,520px); height:min(80vh,760px); background:#111; border-radius:1rem; overflow:hidden; display:flex; flex-direction:column}
+  #camModal .head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#0b1220;color:#fff}
+  #camModal .body{position:relative; flex:1; background:#000}
+  #camModal video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  #overlayFrame::after{content:"";position:absolute;left:10%;right:10%;top:18%;height:64%;
+    border:3px dashed #10b981;border-radius:1rem;box-shadow:0 0 0 9999px rgba(0,0,0,.35) inset;pointer-events:none}
+  /* Raf seçim – büyük butonlar */
+  .shelf-btn{padding:.6rem .9rem;border-radius:.75rem;background:#f1f5f9}
+  .shelf-btn.active{background:#0ea5e9;color:#fff}
+  .nums-wrap{max-height:180px;overflow-y:auto}
+  /* Kamera alt bandı (büyük uyarı) */
+  #camBanner{position:absolute; left:0; right:0; bottom:0; padding:14px 16px; text-align:center;
+    font-weight:700; font-size:18px; letter-spacing:.3px; color:#fff; display:none;}
+  #camBanner.ok{background:linear-gradient(180deg, rgba(16,185,129,.85), rgba(5,150,105,.95));}
+  #camBanner.err{background:linear-gradient(180deg, rgba(239,68,68,.9), rgba(185,28,28,.95));}
+</style>
 </head>
 <body class="min-h-screen bg-slate-50 text-slate-900">
 <header class="brand-gradient text-white">
@@ -98,6 +102,7 @@
     <div class="body">
       <div id="overlayFrame" class="absolute inset-0 z-10 pointer-events-none"></div>
       <video id="video" playsinline autoplay muted></video>
+      <div id="camBanner"></div>
     </div>
   </div>
 </dialog>
@@ -122,7 +127,8 @@
         <div id="nums" class="flex flex-wrap gap-2"></div>
       </div>
 
-      <div class="flex items-center justify-end gap-2 mt-4">
+      <div class="flex items-center justify-between gap-2 mt-4">
+        <div class="text-xs text-slate-500"><span id="bulkHint" class="hidden"></span></div>
         <button id="btnShelfApply" class="px-5 py-2 rounded-xl font-medium text-white" style="background:var(--brand)">Uygula</button>
       </div>
     </div>
@@ -144,7 +150,7 @@
   </div>
 </dialog>
 
-<!-- Manuel Sütun Eşle Modal (GERİ EKLENDİ) -->
+<!-- Manuel Sütun Eşle -->
 <dialog id="mapModal">
   <div class="p-5 min-w-[320px] md:min-w-[560px]">
     <div class="flex items-start justify-between">
@@ -159,7 +165,6 @@
         <label>Fiyat Değ. Tarihi: <select id="selPriceDate"></select></label>
         <label>Raf Kodu (Modeli): <select id="selShelf"></select></label>
       </div>
-      <div class="text-xs text-slate-500">Raf kodu <b>Modeli</b> sütunundan alınır.</div>
     </div>
     <div class="mt-4 flex items-center justify-end gap-2">
       <button id="btnMapApply" class="px-4 py-2 rounded-xl font-medium text-white" style="background:var(--brand)">Uygula</button>
@@ -194,7 +199,9 @@ const selPrice = document.getElementById('selPrice');
 const selPriceDate = document.getElementById('selPriceDate');
 const selShelf = document.getElementById('selShelf');
 const btnMapApply = document.getElementById('btnMapApply');
+const bulkHint = document.getElementById('bulkHint');
 
+/* ==== Durum ==== */
 const state = { rows:[], byBarcode:new Map(), headers:[], map:{}, changes:new Map(), bulkItems:new Set(),
   lastScanAt:0, selectedProduct:null, lastShelves:loadRecentShelves() };
 
@@ -206,12 +213,22 @@ function toStr(v){ return v==null?"":String(v).trim(); }
 function parseDateCell(v){ if(v==null||v==="") return ""; const formats=["DD.MM.YYYY","D.M.YYYY","YYYY-MM-DD","DD/MM/YYYY","D/M/YYYY"]; for(const f of formats){ const d=dayjs(v,f,true); if(d.isValid()) return d.format("DD/MM/YYYY"); } if(typeof v==='number'){ const d=dayjs('1899-12-30').add(v,'day'); return d.format("DD/MM/YYYY"); } const d2=dayjs(v); return d2.isValid()? d2.format("DD/MM/YYYY"): String(v);}
 function pad13(bc){ const s=String(bc||"").replace(/\D/g,""); if(s.length===13) return s; if(s.length===12) return '0'+s; return s; }
 
-/* ==== Ses & titreşim ==== */
+/* ==== Ses & titreşim (güçlü) ==== */
 let audioCtx;
-function beep(freq=880, dur=120){ try{ audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)(); const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.type='sine'; o.frequency.value=freq; g.gain.setValueAtTime(0.001,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.2,audioCtx.currentTime+0.01); g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+dur/1000); o.connect(g).connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+dur/1000);}catch{} }
-function haptic(ms=50){ if(navigator.vibrate) try{ navigator.vibrate(ms);}catch{} }
-function feedbackOK(){ haptic(30); beep(1200,120); }
-function feedbackERR(){ haptic([30,60,30]); beep(300,180); }
+function tone(freq=1000, dur=120, type='sine', gain=0.25){
+  try{
+    audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+    const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+    o.type=type; o.frequency.value=freq;
+    g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(gain, audioCtx.currentTime+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur/1000);
+    o.connect(g).connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + dur/1000);
+  }catch{}
+}
+function haptic(v){ if(navigator.vibrate) try{ navigator.vibrate(v); }catch{} }
+function feedbackOK(){ haptic(40); tone(1400,120,'square',0.35); setTimeout(()=>tone(1800,90,'square',0.25),130); }
+function feedbackERR(){ haptic([60,80,60]); tone(240,220,'sawtooth',0.4); }
 
 /* ==== Sütun eşleme (raf = Modeli) ==== */
 const COLS = {
@@ -238,21 +255,17 @@ function openMapForHeaders(headers, mapDraft, onApply){
   };
 }
 
-/* ==== Sheets hızlı yükleme (XLSX ile CSV parse) ==== */
+/* ==== Sheets yükleme ==== */
 async function loadSheetsFast(){
   loadInfo.textContent="Sheets alınıyor…";
   try{
-    const res = await fetch(SHEETS_URL, {cache:'no-store'});
-    if(!res.ok) throw new Error('HTTP '+res.status);
+    const res = await fetch(SHEETS_URL, {cache:'no-store'}); if(!res.ok) throw new Error('HTTP '+res.status);
     const csv = await res.text();
-    // XLSX CSV’yi okuyabilir
-    const wb = XLSX.read(csv, {type:'string'});
-    const sh = wb.Sheets[wb.SheetNames[0]];
+    const wb = XLSX.read(csv, {type:'string'}); const sh=wb.Sheets[wb.SheetNames[0]];
     const json = XLSX.utils.sheet_to_json(sh, {defval:'', raw:false});
     if(!json.length){ showToast('Sheets boş', true); return; }
-    const headers = Object.keys(json[0]||{});
-    const map = detectColumns(headers);
-    const rows2d = [headers].concat(json.map(obj=> headers.map(h=> obj[h])));
+    const headers = Object.keys(json[0]||{}); const map = detectColumns(headers);
+    const rows2d = [headers].concat(json.map(o=> headers.map(h=> o[h])));
     indexWithHeaders(rows2d, headers, map);
   }catch(e){ console.error(e); showToast('Sheets alınamadı', true); loadInfo.textContent="Hata"; }
 }
@@ -261,18 +274,16 @@ async function loadSheetsFast(){
 async function handleExcel(file){
   loadInfo.textContent="Excel okunuyor…";
   try{
-    const buf=await file.arrayBuffer();
-    const wb=XLSX.read(new Uint8Array(buf), {type:'array'});
+    const buf=await file.arrayBuffer(); const wb=XLSX.read(new Uint8Array(buf), {type:'array'});
     const sh=wb.Sheets[wb.SheetNames[0]];
     const rows2d=XLSX.utils.sheet_to_json(sh,{header:1,defval:'',raw:false});
     if(!rows2d || !rows2d.length){ showToast('Excel boş', true); loadInfo.textContent="Hata"; return; }
-    const headers=(rows2d[0]||[]).map(x=> String(x||'').trim());
-    const map=detectColumns(headers);
+    const headers=(rows2d[0]||[]).map(x=> String(x||'').trim()); const map=detectColumns(headers);
     indexWithHeaders(rows2d, headers, map);
   }catch(e){ console.error(e); showToast('Excel okunamadı', true); loadInfo.textContent="Hata"; }
 }
 
-/* ==== Ortak indeksleyici (liste render yok) ==== */
+/* ==== Ortak indeksleyici ==== */
 function indexWithHeaders(rows2d, headers, map){
   if(!map.barcode || !map.name || !map.shelf){
     openMapForHeaders(headers, map, (manual)=> indexCore(rows2d, headers, manual));
@@ -290,7 +301,7 @@ function indexCore(rows2d, headers, map){
   let i=0; const CHUNK=20000;
   (function step(){
     const end=Math.min(i+CHUNK, dataRows.length);
-    for(let r=i;r=end;r++){
+    for(let r=i;r<end;r++){
       const row=dataRows[r]; const bc=pad13(row[idx.bc]); if(!bc) continue;
       const obj={ barcode:bc, name:toStr(row[idx.nm]), price:toStr(row[idx.pr]),
         priceDate:parseDateCell(row[idx.dt]), shelf:toStr(row[idx.sh]),
@@ -299,11 +310,13 @@ function indexCore(rows2d, headers, map){
       state.rows.push(obj);
     }
     i=end; loadInfo.textContent=`Yüklendi: ${state.rows.length}`;
-    if(i<dataRows.length) setTimeout(step,0); else showToast('Veri hazır');
+    if(i<dataRows.length) setTimeout(step,0);
+    else { enableSaves(); showToast('Veri hazır'); }
   })();
 }
+function enableSaves(){ document.getElementById('btnSaveAll').disabled = state.rows.length===0; document.getElementById('btnSaveChanges').disabled = state.rows.length===0; }
 
-/* ==== Ürün popup (okutunca) ==== */
+/* ==== Ürün popup ==== */
 function openProduct(barcode){
   const r=state.byBarcode.get(pad13(barcode)); if(!r) return;
   state.selectedProduct=r;
@@ -326,19 +339,22 @@ function openProduct(barcode){
   dlgProduct.showModal();
 }
 
-/* ==== Raf seçimi (A–H, 1–50, scroll) ==== */
+/* ==== Raf seçimi (A–H, 1–50) ==== */
 function buildShelfUI(){
+  // Son kullanılanlar
   const recent=document.getElementById('recentShelves'); recent.innerHTML='';
   for(const c of state.lastShelves){ const b=document.createElement('button'); b.className='shelf-btn'; b.textContent=c; b.onclick=()=>{ const [L,N]=c.split('-'); selectLetter(L); selectNumber(N); }; recent.appendChild(b); }
-
+  // Harfler
   const letters = Array.from({length:8},(_,i)=> String.fromCharCode(65+i)); // A..H
   const Lwrap=document.getElementById('letters'); Lwrap.innerHTML='';
   for(const L of letters){ const b=document.createElement('button'); b.className='shelf-btn'; b.textContent=L; b.onclick=()=> selectLetter(L,b); Lwrap.appendChild(b); }
-
+  // Numaralar
   const Nwrap=document.getElementById('nums'); Nwrap.innerHTML='';
   for(let i=1;i<=50;i++){ const b=document.createElement('button'); b.className='shelf-btn'; b.textContent=String(i); b.onclick=()=> selectNumber(String(i),b); Nwrap.appendChild(b); }
-
   dlgShelf.dataset.letter=''; dlgShelf.dataset.number='';
+  // Toplu ipucu
+  const count = state.bulkItems.size;
+  if(count>0){ bulkHint.classList.remove('hidden'); bulkHint.textContent = `${count} ürün toplu atanacak`; } else { bulkHint.classList.add('hidden'); }
 }
 function selectLetter(L, btn){ dlgShelf.dataset.letter=L; document.querySelectorAll('#letters .shelf-btn').forEach(x=> x.classList.remove('active')); if(btn) btn.classList.add('active'); }
 function selectNumber(N, btn){ dlgShelf.dataset.number=N; document.querySelectorAll('#nums .shelf-btn').forEach(x=> x.classList.remove('active')); if(btn) btn.classList.add('active'); }
@@ -358,11 +374,13 @@ document.getElementById('btnShelfApply').addEventListener('click', ()=>{
       state.changes.set(bc, {oldShelf:old, newShelf:code, name:r.name, ts:new Date().toISOString(), who:whoInput.value.trim()});
     }
     state.bulkItems.clear(); bulkCount.classList.add('hidden'); bulkCount.textContent='0';
+    showToast('Toplu atama yapıldı');
   }
 });
 
 /* ==== Kamera ==== */
 let stream=null, detector=null, rafId=null, torchOn=false, track=null;
+const camBanner = document.getElementById('camBanner');
 function secureOk(){ return location.protocol==='https:' || location.hostname==='localhost' || location.hostname==='127.0.0.1'; }
 async function openCameraModal(){
   if(!secureOk()){ alert('Kamera için HTTPS/localhost şart'); return; }
@@ -378,9 +396,20 @@ async function openCameraModal(){
 }
 function stopCamera(){ cancelAnimationFrame(rafId); rafId=null; if(stream) stream.getTracks().forEach(t=>t.stop()); stream=null; track=null; torchOn=false; }
 btnOpenCam.addEventListener('click', openCameraModal);
-btnCloseCam.addEventListener('click', ()=>{ stopCamera(); camModal.close(); });
+btnCloseCam.addEventListener('click', ()=>{
+  stopCamera(); camModal.close();
+  // Kamera kapanınca toplu ürün varsa raf sor
+  if(state.bulkItems.size>0){ openShelfDialog(); }
+});
 btnTorch.addEventListener('click', async ()=>{ if(!track) return; try{ torchOn=!torchOn; await track.applyConstraints({advanced:[{torch:torchOn}]}); }catch{ showToast('Fener desteklenmiyor'); }});
 
+function showCamBanner(msg, ok=true){
+  camBanner.textContent = msg;
+  camBanner.className = ok? 'ok' : 'err';
+  camBanner.id='camBanner'; // className reset sonrası id kaybolmasın
+  camBanner.style.display='block';
+  setTimeout(()=> camBanner.style.display='none', 1000);
+}
 async function scanLoop(){
   if(!stream) return;
   try{
@@ -397,22 +426,28 @@ async function scanLoop(){
 }
 function handleScan(value){
   const raw=String(value).replace(/\D/g,'');
-  if(!(raw.length===12 || raw.length===13)){ showToast('⛔ Okunamadı', true); feedbackERR(); return; }
+  if(!(raw.length===12 || raw.length===13)){ showCamBanner('⛔ Okunamadı', false); feedbackERR(); return; }
   const ean13 = raw.length===12 ? ('0'+raw) : raw;
   document.getElementById('lastBox').textContent = ean13;
   const r = state.byBarcode.get(ean13);
-  if(!r){ showToast('⛔ ERP’de yok', true); feedbackERR(); return; }
+  if(!r){ showCamBanner('⛔ ERP’de yok', false); feedbackERR(); return; }
   feedbackOK();
   if(bulkChk.checked){
     state.bulkItems.add(r.barcode);
     bulkCount.classList.remove('hidden'); bulkCount.textContent = String(state.bulkItems.size);
-    showToast('✅ Okundu');
+    showCamBanner('✅ Okundu', true);
   } else {
+    showCamBanner('✅ Okundu', true);
     openProduct(r.barcode);
   }
 }
 
 /* ==== Kaydetme ==== */
+function ensureWho(){
+  let who = whoInput.value.trim();
+  if(!who){ who = prompt('Kim Adresledi?'); if(who){ whoInput.value = who; } }
+  return (whoInput.value||'').trim();
+}
 function buildFullWorkbook(){
   const rows = state.rows.map(r=>{ const o=Object.assign({}, r.__raw); if(state.map.shelf) o[state.map.shelf]=r.shelf||''; return o; });
   const ws=XLSX.utils.json_to_sheet(rows, {skipHeader:false});
@@ -421,13 +456,23 @@ function buildFullWorkbook(){
 function buildChangesWorkbook(){
   const rows=[]; for(const [bc,ch] of state.changes.entries()){
     rows.push({ 'Barkod':bc, 'Ürün Adı':ch.name||'', 'Eski Raf':ch.oldShelf||'', 'Yeni Raf':ch.newShelf||'',
-      'Tarih/Saat':dayjs(ch.ts).format('YYYY-MM-DD HH:mm'), 'Kim Adresledi':ch.who||'' });
+      'Tarih/Saat':dayjs(ch.ts).format('YYYY-MM-DD HH:mm'), 'Kim Adresledi':(ch.who||whoInput.value||'') });
   }
   const ws=XLSX.utils.json_to_sheet(rows, {skipHeader:false});
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Değişiklikler'); return wb;
 }
-document.getElementById('btnSaveAll').addEventListener('click', ()=>{ const who=whoInput.value.trim(); if(!who){ showToast('"Kim Adresledi" boş olamaz', true); return; } for(const [bc,ch] of state.changes){ if(!ch.who) ch.who=who; } XLSX.writeFile(buildFullWorkbook(),'GuncelRaflar.xlsx'); });
-document.getElementById('btnSaveChanges').addEventListener('click', ()=>{ const who=whoInput.value.trim(); if(!who){ showToast('"Kim Adresledi" boş olamaz', true); return; } for(const [bc,ch] of state.changes){ if(!ch.who) ch.who=who; } XLSX.writeFile(buildChangesWorkbook(),'Degisiklikler.xlsx'); });
+document.getElementById('btnSaveAll').addEventListener('click', ()=>{
+  if(!state.rows.length){ showToast('Veri yok', true); return; }
+  if(!ensureWho()) { showToast('"Kim Adresledi" gerekli', true); return; }
+  for(const [bc,ch] of state.changes){ if(!ch.who) ch.who=whoInput.value.trim(); }
+  XLSX.writeFile(buildFullWorkbook(),'GuncelRaflar.xlsx');
+});
+document.getElementById('btnSaveChanges').addEventListener('click', ()=>{
+  if(!state.rows.length){ showToast('Veri yok', true); return; }
+  if(!ensureWho()) { showToast('"Kim Adresledi" gerekli', true); return; }
+  for(const [bc,ch] of state.changes){ if(!ch.who) ch.who=whoInput.value.trim(); }
+  XLSX.writeFile(buildChangesWorkbook(),'Degisiklikler.xlsx');
+});
 
 /* ==== Eventler & init ==== */
 btnReloadSheets.addEventListener('click', loadSheetsFast);
