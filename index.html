@@ -3,12 +3,271 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Raf Atama Sistemi — ZXing</title>
+  <title>Raf Adresleme • Demir Kırtasiye</title>
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <!-- SheetJS -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
+  <!-- Day.js -->
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/customParseFormat.js"></script>
+  <script>dayjs.extend(dayjs_plugin_customParseFormat)</script>
+  <style>
+    :root{ --brand:#E11D48; --brand2:#1D4ED8; }
+    .brand-gradient{background:linear-gradient(90deg,var(--brand),var(--brand2));}
+    dialog::backdrop{ background:rgba(0,0,0,.45); }
+    dialog{ border:none; border-radius:1rem; padding:0; }
+    #overlay{ position:absolute; inset:0; pointer-events:none; display:none; }
+    .overlay-android::after{ content:""; position:absolute; left:10%; right:10%; top:35%; height:30%; border:3px dashed #10b981; border-radius:1rem; box-shadow:0 0 0 9999px rgba(0,0,0,.35) inset; }
+    .overlay-ios::after{ content:""; position:absolute; left:15%; right:15%; top:30%; height:40%; border:3px solid #3b82f6; border-radius:1.5rem; box-shadow:0 0 0 9999px rgba(0,0,0,.35) inset; }
+    #toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:1rem; z-index:9999; display:none; }
+  </style>
 </head>
-<body>
-  <h1>Raf Atama Sistemi — ZXing</h1>
-  <p>Bu dosya, tam sürüm için temel iskelet ve doğru kütüphaneleri içerir.</p>
+<body class="min-h-screen bg-slate-50 text-slate-900">
+
+<header class="brand-gradient text-white">
+  <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <!-- Inline SVG logo placeholder (tek dosya) -->
+      <svg width="32" height="32" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="10" width="56" height="44" rx="8" fill="#ffffff22" stroke="white" stroke-width="2"/>
+        <path d="M14 22h36M14 32h36M14 42h22" stroke="white" stroke-width="3" stroke-linecap="round"/>
+      </svg>
+      <h1 class="text-xl md:text-2xl font-bold flex items-center gap-2">Demir Kırtasiye • Raf Adresleme</h1>
+    </div>
+    <div class="text-xs opacity-90">BarcodeDetector + getUserMedia • EAN‑13 / UPC‑A</div>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-6 grid gap-6">
+
+  <!-- Top Controls -->
+  <section class="bg-white/90 rounded-2xl shadow p-4 flex flex-col md:flex-row md:items-center gap-3 justify-between">
+    <div class="flex flex-wrap items-center gap-3">
+      <label class="px-4 py-2 rounded-xl font-medium shadow bg-slate-100 cursor-pointer flex items-center gap-2">
+        <i class="fa-solid fa-file-arrow-up"></i>
+        <span>Excel Yükle (XLSX)</span>
+        <input id="fileInput" type="file" accept=".xlsx,.xls" class="hidden" />
+      </label>
+
+      <button id="btnSaveAll" class="px-4 py-2 rounded-xl font-medium shadow text-white disabled:opacity-50" style="background:var(--brand)" disabled>
+        <i class="fa-solid fa-floppy-disk"></i> Excel’e Kaydet (XLSX)
+      </button>
+
+      <button id="btnSaveChanges" class="px-4 py-2 rounded-xl font-medium shadow bg-slate-100 disabled:opacity-50" disabled>
+        <i class="fa-solid fa-file-export"></i> Değişiklikler.xlsx
+      </button>
+
+      <div class="flex items-center gap-2">
+        <label class="text-sm">Kim Adresledi</label>
+        <input id="whoInput" type="text" class="px-3 py-1.5 border rounded-lg text-sm" placeholder="Ad Soyad" />
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <input id="bulkMode" type="checkbox" class="w-4 h-4">
+      <label for="bulkMode" class="text-sm font-medium">Toplu Adresle</label>
+      <span id="bulkCount" class="text-xs ml-2 hidden bg-slate-100 px-2 py-1 rounded-full">0 öğe</span>
+    </div>
+  </section>
+
+  <!-- Camera & Search -->
+  <section class="bg-white/90 rounded-2xl shadow p-4 grid md:grid-cols-2 gap-4">
+    <div>
+      <div class="flex items-center gap-2 mb-2">
+        <button id="btnCamToggle" class="px-4 py-2 rounded-xl font-medium shadow text-white" style="background:var(--brand2)"><i class="fa-solid fa-camera"></i> Kamerayı Aç</button>
+        <button id="btnTorch" class="px-3 py-2 rounded-xl font-medium shadow bg-slate-100 hidden"><i class="fa-solid fa-bolt"></i> Fener</button>
+        <span id="scanStatus" class="text-xs text-slate-600 ml-2"></span>
+      </div>
+      <div id="cameraWrap" class="relative rounded-xl overflow-hidden bg-black">
+        <video id="video" playsinline autoplay muted class="w-full h-72 object-cover"></video>
+        <canvas id="canvas" class="hidden"></canvas>
+        <div id="overlay" class=""></div>
+      </div>
+      <p class="text-xs text-slate-500 mt-2">Sadece EAN‑13 ve UPC‑A barkodları okutulur. Debounce: 1s.</p>
+    </div>
+
+    <div class="space-y-3">
+      <div class="flex items-center justify-between">
+        <div class="font-semibold">Son Okunan</div>
+        <button id="btnClearLast" class="text-sm text-slate-600 hover:text-slate-900">Temizle</button>
+      </div>
+      <div id="lastBox" class="border rounded-xl p-3 text-sm text-slate-600">—</div>
+
+      <div class="flex items-center justify-between mt-4">
+        <div class="font-semibold">Arama</div>
+        <div class="text-xs text-slate-500">(Barkod veya ürün adı)</div>
+      </div>
+      <input id="searchInput" class="px-3 py-2 border rounded-lg w-full text-sm" placeholder="Barkod / Ürün adı" />
+      <div id="searchResults" class="max-h-64 overflow-auto text-sm"></div>
+    </div>
+  </section>
+
+  <!-- Data Table -->
+  <section class="bg-white/90 rounded-2xl shadow p-4">
+    <div class="flex items-center justify-between mb-2">
+      <div class="font-semibold">Ürünler</div>
+      <div class="text-xs text-slate-500"><span id="countInfo">0</span> kayıt</div>
+    </div>
+    <div class="overflow-auto max-h-[420px] border rounded-xl">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-100 sticky top-0">
+          <tr>
+            <th class="px-3 py-2 text-left">Barkod</th>
+            <th class="px-3 py-2 text-left">Ürün Adı</th>
+            <th class="px-3 py-2 text-left">Mağaza (Fiyat)</th>
+            <th class="px-3 py-2 text-left">Fiyat Değ. Tarihi</th>
+            <th class="px-3 py-2 text-left">Raf Kodu (Marka)</th>
+            <th class="px-3 py-2 text-left">İşlem</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<!-- Ürün Popup -->
+<dialog id="dlgProduct">
+  <div class="p-5 min-w-[320px] md:min-w-[560px]">
+    <div class="flex items-start justify-between">
+      <h2 class="text-lg font-semibold">Ürün Bilgisi</h2>
+      <button class="text-slate-500" onclick="dlgProduct.close()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div id="prodBody" class="mt-3 grid gap-2 text-sm"></div>
+    <div class="mt-4 flex items-center justify-end gap-2">
+      <button id="btnShelfOk" class="px-4 py-2 rounded-xl font-medium text-white" style="background:var(--brand)">Raf Doğru</button>
+      <button id="btnShelfChange" class="px-4 py-2 rounded-xl font-medium bg-slate-100">Değiştir</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Raf Seçim Popup -->
+<dialog id="dlgShelf">
+  <div class="p-5 min-w-[320px] md:min-w-[560px]">
+    <div class="flex items-start justify-between">
+      <h2 class="text-lg font-semibold">Raf Seç</h2>
+      <button class="text-slate-500" onclick="dlgShelf.close()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="mt-3 grid gap-4">
+      <div>
+        <div class="text-xs text-slate-500 mb-1">Son kullanılanlar</div>
+        <div id="recentShelves" class="flex flex-wrap gap-2"></div>
+      </div>
+      <div class="grid grid-cols-13 gap-1"><!-- Letters will be injected --></div>
+      <div id="nums" class="flex flex-wrap gap-2"></div>
+      <div class="flex items-center justify-end gap-2">
+        <button id="btnShelfApply" class="px-4 py-2 rounded-xl font-medium text-white" style="background:var(--brand)">Uygula</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- Toast -->
+<div id="toast" class="bg-black/80 text-white rounded-full px-4 py-2 text-sm"></div>
+
+<script>
+// ===== Config =====
+const SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSCE485ORNI2xxxHJkrfJy6IBBeso9hQHxfhZ6dkUShRQWngyeyR5VsZI7rKwBy0A/pub?output=csv";
+
+// ====== State ======
+const state = { rows: [], rawHeaders: {}, byBarcode: new Map(), changes: new Map(), bulkItems: new Set(),
+  lastScanAt: 0, lastShelves: loadRecentShelves(), selectedProduct: null };
+
+const COLS = {
+  barcode: [/^barkod/i, /^barkod ?no/i, /^ean/i, /^ean-?13/i],
+  name: [/^stok ?adı/i, /^ürün ?adı/i, /^stok ?adi/i],
+  price: [/^mağaza$/i, /^magaza$/i, /^fiyat$/i, /^satış fiyatı ?1$/i], // kesin: Mağaza
+  priceDate: [/^satış fiyatı 1 değ\. tar\.?$/i, /fiyat.*değ.*tarihi/i],
+  shelf: [/^marka$/i] // kesin: Marka = Raf Kodu
+};
+
+// ===== Helpers =====
+function normalizeHeader(h){ return String(h||"").trim(); }
+function toStr(v){ return v==null?"":String(v).trim(); }
+function parseDateCell(v){
+  if(v==null||v==="") return "";
+  const formats = ["DD.MM.YYYY","D.M.YYYY","YYYY-MM-DD","DD/MM/YYYY","D/M/YYYY"];
+  for(const f of formats){ const d=dayjs(v, f, true); if(d.isValid()) return d.format("DD/MM/YYYY"); }
+  if(typeof v === 'number'){ const d = dayjs('1899-12-30').add(v,'day'); return d.format("DD/MM/YYYY"); }
+  const d2 = dayjs(v); return d2.isValid()? d2.format("DD/MM/YYYY"): String(v);
+}
+function pad13(bc){ const s = String(bc||"").replace(/\D/g,""); if(s.length===13) return s; if(s.length===12) return '0'+s; return s; }
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",""":"&quot;","'":"&#39;"}[c])); }
+function showToast(msg, persist=false){ const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block'; if(!persist){ setTimeout(()=>{ t.style.display='none'; }, 1000); } }
+function loadRecentShelves(){ try{ const s=localStorage.getItem('recentShelves'); return s? JSON.parse(s): []; }catch{ return []; } }
+function pushRecentShelf(code){ if(!code) return; const arr=loadRecentShelves(); const idx=arr.indexOf(code); if(idx>=0) arr.splice(idx,1); arr.unshift(code); while(arr.length>5) arr.pop(); localStorage.setItem('recentShelves', JSON.stringify(arr)); }
+function renderRecentShelves(){ const wrap=document.getElementById('recentShelves'); wrap.innerHTML=''; for(const c of state.lastShelves){ const b=document.createElement('button'); b.className='px-3 py-1.5 rounded-lg bg-slate-100'; b.textContent=c; b.onclick=()=>{ state.pendingShelf=c; }; wrap.appendChild(b);} }
+function detectColumns(headers){ const map={ barcode:null,name:null,price:null,priceDate:null,shelf:null }; headers.forEach(h=>{ const H=normalizeHeader(h); for(const k of Object.keys(COLS)){ if(map[k]) continue; if(COLS[k].some(re=>re.test(H))) map[k]=H; } }); if(!map.price){ const m=headers.find(h=>/^mağaza$/i.test(h)); if(m) map.price=m; } if(!map.shelf){ const m=headers.find(h=>/^marka$/i.test(h)); if(m) map.shelf=m; } return map; }
+function normalizeRows(raw, map){ const out=[]; state.byBarcode.clear(); for(const row of raw){ const bc = pad13(row[map.barcode]); if(!bc) continue; const r={ barcode:bc, name:toStr(row[map.name]), price:toStr(row[map.price]), priceDate:parseDateCell(row[map.priceDate]), shelf:toStr(row[map.shelf]), __raw:row }; out.push(r); state.byBarcode.set(bc,r); } return out; }
+function indexBy(headers, data){ const map=detectColumns(headers); state.rawHeaders=map; state.rows=normalizeRows(data,map); renderTable(); enableSavesIfReady(); }
+
+// ===== Loaders =====
+async function loadSheetsFixed(){ try{ const res = await fetch(SHEETS_URL); if(!res.ok) throw new Error('Sheets verisi alınamadı'); const text = await res.text(); const wb = XLSX.read(text, {type:'string'}); const sh = wb.Sheets[wb.SheetNames[0]]; const json = XLSX.utils.sheet_to_json(sh, {defval:''}); const headers = Object.keys(json[0]||{}); indexBy(headers, json); showToast('Veri yüklendi'); }catch(e){ showToast('Sheets alınamadı', true); console.error(e); } }
+function loadExcel(file){ const reader=new FileReader(); reader.onload=(e)=>{ const data=new Uint8Array(e.target.result); const wb=XLSX.read(data, {type:'array'}); const sh=wb.Sheets[wb.SheetNames[0]]; const json=XLSX.utils.sheet_to_json(sh, {defval:''}); const headers=Object.keys(json[0]||{}); indexBy(headers,json); }; reader.readAsArrayBuffer(file); }
+
+// ===== UI Render =====
+function renderTable(){ const tb=document.getElementById('tbody'); tb.innerHTML=''; for(const r of state.rows){ const tr=document.createElement('tr'); tr.className='border-b'; const td=(t)=>{ const e=document.createElement('td'); e.className='px-3 py-2'; e.innerHTML=t; return e; }; tr.appendChild(td(r.barcode||'')); tr.appendChild(td(escapeHtml(r.name||''))); tr.appendChild(td(r.price!==''? escapeHtml(r.price):'')); tr.appendChild(td(escapeHtml(r.priceDate||''))); tr.appendChild(td(`<span class='font-semibold'>${escapeHtml(r.shelf||'')}</span>`)); const btn=`<button class='text-xs px-2 py-1 rounded bg-slate-100' data-bc='${r.barcode}'>Detay</button>`; tr.appendChild(td(btn)); tb.appendChild(tr); } document.getElementById('countInfo').textContent=String(state.rows.length); tb.querySelectorAll('button[data-bc]').forEach(b=> b.addEventListener('click', ()=> openProduct(b.dataset.bc))); }
+
+// ===== Product & Shelf =====
+function openProduct(barcode){ const r=state.byBarcode.get(pad13(barcode)); if(!r) return; state.selectedProduct=r; const body=document.getElementById('prodBody'); body.innerHTML=`
+  <div class='grid md:grid-cols-2 gap-2'>
+    <div><div class='text-xs text-slate-500'>Barkod</div><div class='font-mono'>${r.barcode}</div></div>
+    <div><div class='text-xs text-slate-500'>Raf Kodu</div><div class='text-2xl font-bold'>${escapeHtml(r.shelf||'')}</div></div>
+    <div class='md:col-span-2'><div class='text-xs text-slate-500'>Ürün Adı</div><div>${escapeHtml(r.name||'')}</div></div>
+    <div><div class='text-xs text-slate-500'>Mağaza (Fiyat)</div><div>${escapeHtml(r.price||'')}</div></div>
+    <div><div class='text-xs text-slate-500'>Fiyat Değ. Tarihi</div><div>${escapeHtml(r.priceDate||'')}</div></div>
+  </div>
+  <div class='mt-3'>${r.shelf? '' : '<button id="btnGiveShelf" class="px-3 py-2 rounded-lg bg-slate-100">Raf Kodu Ver</button>'}</div>
+`; document.getElementById('btnShelfOk').style.display = r.shelf? 'inline-flex':'none'; document.getElementById('btnShelfChange').style.display = r.shelf? 'inline-flex':'none'; const bGive=document.getElementById('btnGiveShelf'); if(bGive) bGive.onclick=()=> openShelfDialog(); document.getElementById('btnShelfChange').onclick=()=> openShelfDialog(); document.getElementById('btnShelfOk').onclick=()=> { dlgProduct.close(); }; dlgProduct.showModal(); }
+function applyShelfTo(barcode, shelf){ const r=state.byBarcode.get(pad13(barcode)); if(!r) return; const old=r.shelf||''; if(old===shelf) return; r.shelf=shelf; pushRecentShelf(shelf); state.lastShelves=loadRecentShelves(); const who=document.getElementById('whoInput').value.trim(); const ts=new Date().toISOString(); state.changes.set(r.barcode, {oldShelf:old,newShelf:shelf,name:r.name,ts,who}); renderTable(); }
+
+const letters = Array.from({length:26}, (_,i)=> String.fromCharCode(65+i));
+function buildShelfUI(){ const grid = dlgShelf.querySelector('.grid.grid-cols-13'); if(grid && !grid.dataset.ready){ grid.dataset.ready='1'; grid.style.gridTemplateColumns='repeat(13,minmax(0,1fr))'; const row1=letters.slice(0,13), row2=letters.slice(13); for(const L of [...row1, ...row2]){ const b=document.createElement('button'); b.className='px-3 py-2 rounded-lg bg-slate-100 m-0.5'; b.textContent=L; b.onclick=()=>{ dlgShelf.dataset.letter=L; }; grid.appendChild(b); } const nums=document.getElementById('nums'); nums.innerHTML=''; for(let i=1;i<=10;i++){ const b=document.createElement('button'); b.className='px-3 py-2 rounded-lg bg-slate-100'; b.textContent=String(i); b.onclick=()=>{ dlgShelf.dataset.number=String(i); }; nums.appendChild(b); } } renderRecentShelves(); }
+function openShelfDialog(){ buildShelfUI(); dlgShelf.showModal(); }
+document.getElementById('btnShelfApply').addEventListener('click', ()=>{ const L=dlgShelf.dataset.letter, N=dlgShelf.dataset.number; if(!L||!N){ showToast('Lütfen raf harfi ve numarası seçin', true); return; } const code=`${L}-${N}`; dlgShelf.close(); if(state.selectedProduct){ applyShelfTo(state.selectedProduct.barcode, code); dlgProduct.close(); } else if(state.bulkItems.size>0){ for(const bc of state.bulkItems){ applyShelfTo(bc, code); } state.bulkItems.clear(); document.getElementById('bulkCount').textContent='0 öğe'; document.getElementById('bulkCount').classList.add('hidden'); } });
+
+// ===== Search =====
+const searchInput=document.getElementById('searchInput');
+searchInput.addEventListener('input', ()=>{ const q=searchInput.value.trim().toLowerCase(); const box=document.getElementById('searchResults'); box.innerHTML=''; if(!q) return; const hits=state.rows.filter(r=> r.barcode.includes(q) || (r.name||'').toLowerCase().includes(q)).slice(0,50); for(const r of hits){ const div=document.createElement('div'); div.className='px-3 py-2 border-b hover:bg-slate-50 cursor-pointer'; div.innerHTML=`<div class='font-mono text-xs text-slate-500'>${r.barcode}</div><div>${escapeHtml(r.name||'')}</div>`; div.onclick=()=> openProduct(r.barcode); box.appendChild(div); } });
+document.getElementById('btnClearLast').addEventListener('click', ()=>{ document.getElementById('lastBox').textContent='—'; });
+
+// ===== Bulk Mode =====
+const bulkChk=document.getElementById('bulkMode');
+bulkChk.checked=false;
+bulkChk.addEventListener('change', ()=>{ if(!bulkChk.checked){ state.bulkItems.clear(); const tag=document.getElementById('bulkCount'); tag.classList.add('hidden'); tag.textContent='0 öğe'; } });
+
+// ===== Camera =====
+let stream=null, detector=null, rafId=null, torchOn=false, track=null;
+const video=document.getElementById('video');
+const overlay=document.getElementById('overlay');
+
+function deviceOverlayInit(){ overlay.style.display='block'; const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (/Mac/.test(navigator.userAgent) && 'ontouchend' in document); overlay.className = isIOS? 'overlay-ios' : 'overlay-android'; }
+async function toggleCamera(){ if(stream){ stopCamera(); return; } if(!('BarcodeDetector' in window)){ document.getElementById('scanStatus').textContent='Bu cihazda BarcodeDetector desteklenmiyor'; return; } detector = new BarcodeDetector({formats:['ean_13','upc_a']}); stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }); video.srcObject=stream; track=stream.getVideoTracks()[0]; deviceOverlayInit(); const caps=track.getCapabilities?.(); if(caps && 'torch' in caps){ document.getElementById('btnTorch').classList.remove('hidden'); } else { document.getElementById('btnTorch').classList.add('hidden'); } scanLoop(); document.getElementById('btnCamToggle').innerHTML='<i class="fa-solid fa-camera"></i> Kamerayı Kapat'; }
+function stopCamera(){ cancelAnimationFrame(rafId); rafId=null; if(stream) stream.getTracks().forEach(t=>t.stop()); stream=null; track=null; torchOn=false; document.getElementById('btnCamToggle').innerHTML='<i class="fa-solid fa-camera"></i> Kamerayı Aç'; }
+async function scanLoop(){ if(!stream) return; try{ const detections = await detector.detect(video); if(detections && detections.length){ const now=Date.now(); if(now - state.lastScanAt > 1000){ state.lastScanAt=now; const val=detections[0].rawValue || detections[0].rawValueText || ''; handleScan(val); } } }catch(e){} rafId=requestAnimationFrame(scanLoop); }
+function handleScan(value){ const raw=String(value).replace(/\D/g,''); if(!(raw.length===12||raw.length===13)){ showToast('⛔ Okunamadı', true); return; } const ean13=pad13(raw); let r=state.byBarcode.get(ean13); if(!r && raw.length===12) r=state.byBarcode.get('0'+raw); document.getElementById('lastBox').textContent=ean13; if(!r){ showToast('⛔ ERP’de yok', true); return; } if(bulkChk.checked){ state.bulkItems.add(r.barcode); const tag=document.getElementById('bulkCount'); tag.classList.remove('hidden'); tag.textContent = `${state.bulkItems.size} öğe`; showToast('✅ Okundu'); } else { openProduct(r.barcode); } }
+async function toggleTorch(){ if(!track) return; try{ torchOn=!torchOn; await track.applyConstraints({ advanced: [{ torch: torchOn }] }); }catch(e){ showToast('Fener desteklenmiyor'); }}
+
+// ===== Save to Excel =====
+function enableSavesIfReady(){ const has=state.rows && state.rows.length>0; document.getElementById('btnSaveAll').disabled=!has; document.getElementById('btnSaveChanges').disabled=!has; }
+function buildFullWorkbook(){ const hdr=state.rawHeaders; const rows=state.rows.map(r=>{ const o=Object.assign({}, r.__raw); if(hdr.shelf) o[hdr.shelf]=r.shelf||''; return o; }); const ws=XLSX.utils.json_to_sheet(rows, {skipHeader:false}); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Veri'); return wb; }
+function buildChangesWorkbook(){ const rows=[]; for(const [bc,ch] of state.changes.entries()){ rows.push({ 'Barkod':bc, 'Ürün Adı':ch.name||'', 'Eski Raf':ch.oldShelf||'', 'Yeni Raf':ch.newShelf||'', 'Tarih/Saat':dayjs(ch.ts).format('YYYY-MM-DD HH:mm'), 'Kim Adresledi':ch.who||'' }); } const ws=XLSX.utils.json_to_sheet(rows, {skipHeader:false}); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Değişiklikler'); return wb; }
+function downloadWb(wb,name){ XLSX.writeFile(wb,name); }
+
+// ===== Events =====
+fileInput.addEventListener('change', (e)=>{ const f=e.target.files?.[0]; if(!f) return; loadExcel(f); });
+btnCamToggle.addEventListener('click', toggleCamera);
+btnTorch.addEventListener('click', toggleTorch);
+btnSaveAll.addEventListener('click', ()=>{ const who=document.getElementById('whoInput').value.trim(); if(!who){ showToast('"Kim Adresledi" boş olamaz', true); return; } for(const [bc,ch] of state.changes){ if(!ch.who) ch.who=who; } const wb=buildFullWorkbook(); downloadWb(wb, 'GuncelRaflar.xlsx'); });
+btnSaveChanges.addEventListener('click', ()=>{ const who=document.getElementById('whoInput').value.trim(); if(!who){ showToast('"Kim Adresledi" boş olamaz', true); return; } for(const [bc,ch] of state.changes){ if(!ch.who) ch.who=who; } const wb=buildChangesWorkbook(); downloadWb(wb, 'Degisiklikler.xlsx'); });
+
+// ===== Init =====
+renderRecentShelves();
+loadSheetsFixed();
+</script>
+
 </body>
 </html>
