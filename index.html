@@ -18,13 +18,15 @@
     dialog::backdrop{ background:rgba(0,0,0,.55); }
     dialog{ border:none; border-radius:1rem; padding:0; }
     #toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:1rem; z-index:9999; display:none; }
-    /* Kamera modal overlay */
-    #camModal .head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #e5e7eb}
-    #camModal .body{position:relative;width:100%;height:420px;background:#000}
+    /* Kamera modal – mobilde düzgün oran ve büyük görünüm */
+    #camModal .wrap{width:min(92vw,520px); height:min(80vh,760px); background:#111; border-radius:1rem; overflow:hidden; display:flex; flex-direction:column}
+    #camModal .head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#0b1220;color:#fff}
+    #camModal .body{position:relative; flex:1; background:#000}
     #camModal video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-    #overlayFrame::after{content:"";position:absolute;left:12%;right:12%;top:25%;height:50%;
+    #overlayFrame::after{content:"";position:absolute;left:10%;right:10%;top:18%;height:64%;
       border:3px dashed #10b981;border-radius:1rem;box-shadow:0 0 0 9999px rgba(0,0,0,.35) inset;pointer-events:none}
     select{border:1px solid #e5e7eb;border-radius:0.5rem;padding:0.4rem}
+    /* Tablo tamamen kaldırıldı: performans için liste yok */
   </style>
 </head>
 <body class="min-h-screen bg-slate-50 text-slate-900">
@@ -65,81 +67,50 @@
       </div>
     </div>
 
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-3">
+      <span id="loadInfo" class="text-xs text-slate-500">Hazır değil</span>
       <input id="bulkMode" type="checkbox" class="w-4 h-4">
       <label for="bulkMode" class="text-sm font-medium">Toplu Adresle</label>
-      <span id="bulkCount" class="text-xs ml-2 hidden bg-slate-100 px-2 py-1 rounded-full">0 öğe</span>
+      <span id="bulkCount" class="text-xs ml-2 hidden bg-slate-100 px-2 py-1 rounded-full">0</span>
     </div>
   </section>
 
-  <!-- Kamera & Arama -->
-  <section class="bg-white/90 rounded-2xl shadow p-4 grid md:grid-cols-2 gap-4">
-    <div>
-      <div class="flex items-center gap-2 mb-2">
-        <button id="btnOpenCam" class="px-4 py-2 rounded-xl font-medium shadow text-white" style="background:var(--brand2)">
-          <i class="fa-solid fa-camera"></i> Kamerayı Aç (Popup)
-        </button>
-        <span id="scanStatus" class="text-xs text-slate-600 ml-2"></span>
-      </div>
-      <div class="text-xs text-slate-500">
-        Sadece EAN-13 / UPC-A. Debounce: 1sn. <span class="text-[11px] text-slate-400">Kamera için HTTPS veya localhost gerekir.</span>
-      </div>
-      <div class="mt-3">
-        <div class="font-semibold mb-1">Son Okunan</div>
-        <div id="lastBox" class="border rounded-xl p-3 text-sm text-slate-600">—</div>
-      </div>
-    </div>
-
-    <div class="space-y-3">
-      <div class="flex items-center justify-between">
-        <div class="font-semibold">Arama</div>
-        <div class="text-xs text-slate-500">(Barkod veya ürün adı)</div>
-      </div>
-      <input id="searchInput" class="px-3 py-2 border rounded-lg w-full text-sm" placeholder="Barkod / Ürün adı" />
-      <div id="searchResults" class="max-h-64 overflow-auto text-sm"></div>
-    </div>
-  </section>
-
-  <!-- Tablo -->
+  <!-- Kamera -->
   <section class="bg-white/90 rounded-2xl shadow p-4">
-    <div class="flex items-center justify-between mb-2">
-      <div class="font-semibold">Ürünler</div>
-      <div class="text-xs text-slate-500"><span id="countInfo">0</span> kayıt</div>
+    <div class="flex items-center gap-2 mb-2">
+      <button id="btnOpenCam" class="px-4 py-2 rounded-xl font-medium shadow text-white" style="background:var(--brand2)">
+        <i class="fa-solid fa-camera"></i> Kamerayı Aç (Popup)
+      </button>
+      <span id="scanStatus" class="text-xs text-slate-600 ml-2"></span>
     </div>
-    <div class="overflow-auto max-h-[420px] border rounded-xl">
-      <table class="min-w-full text-sm">
-        <thead class="bg-slate-100 sticky top-0">
-          <tr>
-            <th class="px-3 py-2 text-left">Barkod</th>
-            <th class="px-3 py-2 text-left">Ürün Adı</th>
-            <th class="px-3 py-2 text-left">Mağaza (Fiyat)</th>
-            <th class="px-3 py-2 text-left">Fiyat Değ. Tarihi</th>
-            <th class="px-3 py-2 text-left">Raf Kodu (Marka)</th>
-            <th class="px-3 py-2 text-left">İşlem</th>
-          </tr>
-        </thead>
-        <tbody id="tbody"></tbody>
-      </table>
+    <div class="text-xs text-slate-500">
+      Sadece EAN-13 / UPC-A. Debounce: 1sn. <span class="text-[11px] text-slate-400">Kamera için HTTPS veya localhost gerekir.</span>
+    </div>
+    <div class="mt-3">
+      <div class="font-semibold mb-1">Son Okunan</div>
+      <div id="lastBox" class="border rounded-xl p-3 text-sm text-slate-600">—</div>
     </div>
   </section>
 </main>
 
 <!-- Kamera Modal -->
 <dialog id="camModal">
-  <div class="head">
-    <div class="font-semibold">Kamera</div>
-    <div class="flex items-center gap-2">
-      <button id="btnTorch" class="px-3 py-1.5 rounded-lg bg-slate-100 hidden"><i class="fa-solid fa-bolt"></i> Fener</button>
-      <button id="btnCloseCam" class="px-3 py-1.5 rounded-lg bg-slate-100"><i class="fa-solid fa-xmark"></i> Kapat</button>
+  <div class="wrap">
+    <div class="head">
+      <div class="font-semibold">Kamera</div>
+      <div class="flex items-center gap-2">
+        <button id="btnTorch" class="px-3 py-1.5 rounded-lg bg-slate-200 hidden text-slate-900"><i class="fa-solid fa-bolt"></i> Fener</button>
+        <button id="btnCloseCam" class="px-3 py-1.5 rounded-lg bg-slate-200 text-slate-900"><i class="fa-solid fa-xmark"></i> Kapat</button>
+      </div>
     </div>
-  </div>
-  <div class="body">
-    <div id="overlayFrame" class="absolute inset-0 z-10 pointer-events-none"></div>
-    <video id="video" playsinline autoplay muted></video>
+    <div class="body">
+      <div id="overlayFrame" class="absolute inset-0 z-10 pointer-events-none"></div>
+      <video id="video" playsinline autoplay muted></video>
+    </div>
   </div>
 </dialog>
 
-<!-- Sütun Eşle Modal (manuel eşleştirme gerektiğinde) -->
+<!-- Sütun Eşle Modal -->
 <dialog id="mapModal">
   <div class="p-5 min-w-[320px] md:min-w-[560px]">
     <div class="flex items-start justify-between">
@@ -152,9 +123,9 @@
         <label>Ürün Adı: <select id="selName"></select></label>
         <label>Mağaza (Fiyat): <select id="selPrice"></select></label>
         <label>Fiyat Değ. Tarihi: <select id="selPriceDate"></select></label>
-        <label>Raf Kodu (Marka): <select id="selShelf"></select></label>
+        <label>Raf Kodu (Modeli): <select id="selShelf"></select></label>
       </div>
-      <div class="text-xs text-slate-500">İpucu: Barkod sütunu 12–13 haneli numerik olabilir; baştaki 0’lar korunur.</div>
+      <div class="text-xs text-slate-500">Raf kodu artık <b>Modeli</b> sütunundan alınır.</div>
     </div>
     <div class="mt-4 flex items-center justify-end gap-2">
       <button id="btnMapApply" class="px-4 py-2 rounded-xl font-medium text-white" style="background:var(--brand)">Uygula</button>
@@ -226,21 +197,27 @@ const selPrice = document.getElementById('selPrice');
 const selPriceDate = document.getElementById('selPriceDate');
 const selShelf = document.getElementById('selShelf');
 const btnMapApply = document.getElementById('btnMapApply');
+const loadInfo = document.getElementById('loadInfo');
 
 /* ==== DURUM ==== */
 const state = {
-  rows: [], rawHeaders: {}, byBarcode: new Map(), changes: new Map(), bulkItems: new Set(),
-  lastScanAt: 0, lastShelves: loadRecentShelves(), selectedProduct: null,
-  pendingRaw: null, pendingHeaders: []
+  rows: [],            // orijinal satırlar (export için)
+  byBarcode: new Map(),// hızlı arama
+  headers: [],         // orijinal başlıklar
+  map: {},             // alan eşleme
+  changes: new Map(),
+  bulkItems: new Set(),
+  lastScanAt: 0, lastShelves: loadRecentShelves(), selectedProduct: null
 };
 
 /* ==== SÜTUN KALIPLARI ==== */
+/* Raf = Modeli  */
 const COLS = {
   barcode: [/^barkod/i, /^barkod ?no/i, /^ean/i, /^ean-?13/i, /^barcode/i],
   name: [/^stok ?adı/i, /^ürün ?adı/i, /^stok ?adi/i, /^product/i, /^isim/i],
   price: [/^mağaza$/i, /^magaza$/i, /^fiyat$/i, /^satış fiyatı ?1$/i, /^price/i],
   priceDate: [/^satış fiyatı 1 değ\. tar\.?$/i, /fiyat.*değ.*tarihi/i, /^date/i],
-  shelf: [/^marka$/i, /^raf ?kodu/i, /^shelf/i]
+  shelf: [/^modeli$/i] // <—— kritik değişiklik
 };
 
 /* ==== YARDIMCILAR ==== */
@@ -257,85 +234,107 @@ function escapeHtml(s){ return String(s).replace(/[&<>\"']/g, c=>({"&":"&amp;","
 function showToast(msg, persist=false){ const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block'; if(!persist){ setTimeout(()=>{ t.style.display='none'; }, 1200); } }
 function loadRecentShelves(){ try{ const s=localStorage.getItem('recentShelves'); return s? JSON.parse(s): []; }catch{ return []; } }
 function pushRecentShelf(code){ if(!code) return; const arr=loadRecentShelves(); const i=arr.indexOf(code); if(i>=0) arr.splice(i,1); arr.unshift(code); while(arr.length>5) arr.pop(); localStorage.setItem('recentShelves', JSON.stringify(arr)); }
-function renderRecentShelves(){ const wrap=document.getElementById('recentShelves'); if(!wrap) return; wrap.innerHTML=''; for(const c of state.lastShelves){ const b=document.createElement('button'); b.className='px-3 py-1.5 rounded-lg bg-slate-100'; b.textContent=c; b.onclick=()=>{ state.pendingShelf=c; }; wrap.appendChild(b);} }
 function normalizeHeader(h){ return String(h||"").trim(); }
 
-/* Başlık satırı tahmin */
-function guessHeaderRow(rows2d){
-  let bestIndex=0, bestScore=-1;
-  for(let i=0;i<Math.min(rows2d.length, 20);i++){
-    const row=rows2d[i]||[]; let score=0;
-    for(const cell of row){ const v=toStr(cell); if(/[a-zA-ZığüşöçİĞÜŞÖÇ]/.test(v)) score++; }
-    if(score>bestScore){ bestScore=score; bestIndex=i; }
-  }
-  return bestIndex;
-}
-
+/* Başlık eşleme */
 function detectColumns(headers){
   const map={ barcode:null,name:null,price:null,priceDate:null,shelf:null };
   headers.forEach(h=>{ const H=normalizeHeader(h);
     for(const k of Object.keys(COLS)){ if(map[k]) continue; if(COLS[k].some(re=>re.test(H))) map[k]=H; }
   });
-  if(!map.price){ const m=headers.find(h=>/^mağaza$/i.test(h)); if(m) map.price=m; }
-  if(!map.shelf){ const m=headers.find(h=>/^marka$/i.test(h)); if(m) map.shelf=m; }
   return map;
 }
 
-function normalizeRows(raw, map){
-  const out=[]; state.byBarcode.clear();
-  for(const row of raw){
-    const bc = pad13(row[map.barcode]);
-    if(!bc) continue;
-    const r={ barcode:bc, name:toStr(row[map.name]), price:toStr(row[map.price]),
-      priceDate:parseDateCell(row[map.priceDate]), shelf:toStr(row[map.shelf]), __raw:row };
-    out.push(r); state.byBarcode.set(bc,r);
-  }
-  return out;
-}
-
-function renderTable(){
-  const tb=document.getElementById('tbody'); tb.innerHTML='';
-  for(const r of state.rows){
-    const tr=document.createElement('tr'); tr.className='border-b';
-    const td=(t)=>{ const e=document.createElement('td'); e.className='px-3 py-2'; e.innerHTML=t; return e; };
-    tr.appendChild(td(r.barcode||''));
-    tr.appendChild(td(escapeHtml(r.name||'')));
-    tr.appendChild(td(r.price!==''? escapeHtml(r.price):''));
-    tr.appendChild(td(escapeHtml(r.priceDate||'')));
-    tr.appendChild(td(`<span class="font-semibold">${escapeHtml(r.shelf||'')}</span>`));
-    const btn=`<button class="text-xs px-2 py-1 rounded bg-slate-100" data-bc="${r.barcode}">Detay</button>`;
-    tr.appendChild(td(btn));
-    tb.appendChild(tr);
-  }
-  document.getElementById('countInfo').textContent=String(state.rows.length);
-  tb.querySelectorAll('button[data-bc]').forEach(b=> b.addEventListener('click', ()=> openProduct(b.dataset.bc)));
-  enableSavesIfReady();
-  persist(); // localStorage’a yaz
-}
-
-/* ==== SHEETS YÜKLE ==== */
-async function loadSheets(){
+/* Hızlı CSV parser (Sheets için) – chunk’lı */
+async function loadSheetsFast(){
+  loadInfo.textContent = "Sheets alınıyor…";
   try{
     const res = await fetch(SHEETS_URL, {cache:'no-store'});
-    if(!res.ok) throw new Error('Sheets verisi alınamadı');
+    if(!res.ok) throw new Error('HTTP '+res.status);
     const text = await res.text();
-    const wb = XLSX.read(text, {type:'string', raw:false});
-    const sh = wb.Sheets[wb.SheetNames[0]];
-    const json = XLSX.utils.sheet_to_json(sh, {defval:'', raw:false});
-    const headers = Object.keys(json[0]||{});
+    // Basit CSV parse (virgül, çift tırnak kaçışı)
+    const rows = [];
+    let i=0, cur="", cell="", inQ=false, row=[];
+    function pushCell(){ row.push(cell); cell=""; }
+    function pushRow(){ rows.push(row); row=[]; }
+    while(i<text.length){
+      const ch=text[i];
+      if(inQ){
+        if(ch=='"'){
+          if(text[i+1]=='"'){ cell+='"'; i++; } else { inQ=false; }
+        } else { cell+=ch; }
+      } else {
+        if(ch=='"'){ inQ=true; }
+        else if(ch==','){ pushCell(); }
+        else if(ch=='\n'){ pushCell(); pushRow(); }
+        else if(ch=='\r'){ /* ignore */ }
+        else { cell+=ch; }
+      }
+      i++;
+      if(i % 200000 === 0) await new Promise(r=>setTimeout(r,0)); // UI nefes alsın
+    }
+    if(cell.length || row.length){ pushCell(); pushRow(); }
+
+    if(rows.length===0){ showToast('Sheets boş', true); return; }
+
+    const headers = rows[0].map(s=>s.trim());
     const map = detectColumns(headers);
-    state.rawHeaders = map;
-    state.rows = normalizeRows(json, map);
-    renderTable();
-    showToast('Veri yüklendi');
+    // kritik alanlardan biri yoksa manuel eşleştir
+    if(!map.barcode || !map.name || !map.shelf){
+      state.headers = headers;
+      openMapForHeaders(headers, map, (manual)=>{
+        indexRowsFromArray(rows.slice(1), headers, manual);
+      });
+    } else {
+      indexRowsFromArray(rows.slice(1), headers, map);
+    }
   }catch(e){
-    console.error(e);
-    showToast('Sheets alınamadı', true);
+    console.error(e); showToast('Sheets alınamadı', true); loadInfo.textContent="Hata";
   }
 }
 
-/* ==== EXCEL YÜKLE (güçlü) ==== */
-function openMapModal(headers, mapDraft, onApply){
+/* Dizi satırlardan indekse çevir (UI’ye çizim yok) */
+function indexRowsFromArray(dataRows, headers, map){
+  state.rows = [];
+  state.byBarcode.clear();
+  state.headers = headers;
+  state.map = map;
+
+  const H = (h)=> headers.indexOf(h);
+  const idx = {
+    bc: H(map.barcode), nm: H(map.name), pr: H(map.price),
+    dt: H(map.priceDate), sh: H(map.shelf)
+  };
+
+  // 20k’lık dilimlerde işle – UI donmasın
+  let p = 0; const CHUNK = 20000;
+  function step(){
+    const end = Math.min(p+CHUNK, dataRows.length);
+    for(let r=p; r<end; r++){
+      const row = dataRows[r];
+      const bc = pad13((row[idx.bc]||""));
+      if(!bc) continue;
+      const obj = {
+        barcode: bc,
+        name: toStr(row[idx.nm]),
+        price: toStr(row[idx.pr]),
+        priceDate: parseDateCell(row[idx.dt]),
+        shelf: toStr(row[idx.sh]),
+        __raw: Object.fromEntries(headers.map((h,i)=>[h,row[i]]))
+      };
+      if(!state.byBarcode.has(bc)) state.byBarcode.set(bc, obj);
+      state.rows.push(obj);
+    }
+    p = end;
+    loadInfo.textContent = `Yüklendi: ${state.rows.length} satır`;
+    if(p < dataRows.length) setTimeout(step, 0);
+    else { enableSavesIfReady(); showToast('Veri hazır'); }
+  }
+  step();
+}
+
+/* Manuel eşle (Sheets veya Excel) */
+function openMapForHeaders(headers, mapDraft, onApply){
   const opts = ['—'].concat(headers);
   function fill(sel, val){ sel.innerHTML = opts.map(o=> `<option value="${o}">${o}</option>`).join(''); sel.value = (val && headers.includes(val)) ? val : '—'; }
   fill(selBarcode, mapDraft.barcode);
@@ -346,68 +345,49 @@ function openMapModal(headers, mapDraft, onApply){
   mapModal.showModal();
   btnMapApply.onclick = ()=>{
     const m={ barcode: selBarcode.value, name: selName.value, price: selPrice.value, priceDate: selPriceDate.value, shelf: selShelf.value };
-    if([m.barcode, m.name, m.shelf].some(v=> v==='—' || !v)){ alert('En az Barkod, Ürün Adı ve Raf(=Marka) eşleştirin.'); return; }
+    if([m.barcode, m.name, m.shelf].some(v=> v==='—' || !v)){ alert('En az Barkod, Ürün Adı ve Modeli (raf) seçin.'); return; }
     mapModal.close(); onApply(m);
   };
 }
 
+/* Excel yükleme – UI yok, sadece indeks */
 async function parseExcelFile(file){
   function fromSheet(sh){
     const rows2d = XLSX.utils.sheet_to_json(sh, {header:1, defval:'', raw:false});
     if(!rows2d || rows2d.length===0) return null;
-    const hdrIdx = guessHeaderRow(rows2d);
-    const headers = (rows2d[hdrIdx]||[]).map(x=> toStr(x));
-    const dataRows = rows2d.slice(hdrIdx+1).map(r=>{ const o={}; headers.forEach((h,i)=> o[h]=r[i]); return o; });
+    const headers = rows2d[0].map(x=> toStr(x));
+    const dataRows = rows2d.slice(1);
     return {headers, dataRows};
   }
-  // Try 1: ArrayBuffer
   try{
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(new Uint8Array(buf), {type:'array'});
-    let chosen=null;
-    for(const sn of wb.SheetNames){ const sh=wb.Sheets[sn]; if(!sh||!sh['!ref']) continue; const rng=XLSX.utils.decode_range(sh['!ref']); const rows=rng.e.r-rng.s.r+1; if(rows<2) continue; const got=fromSheet(sh); if(got && got.dataRows.length){ chosen=got; break; } }
-    if(!chosen){ const sh=wb.Sheets[wb.SheetNames[0]]; if(sh) chosen=fromSheet(sh); }
-    if(chosen) return chosen;
-  }catch(e){ console.warn('ARRAY parse failed', e); }
-  // Try 2: Binary
-  try{
-    const reader = new FileReader();
-    const bin = await new Promise((resolve,reject)=>{ reader.onerror=()=>reject(reader.error); reader.onload=()=>resolve(reader.result); reader.readAsBinaryString(file); });
-    const wb = XLSX.read(bin, {type:'binary'});
     const sh = wb.Sheets[wb.SheetNames[0]];
-    const chosen = fromSheet(sh);
-    if(chosen) return chosen;
-  }catch(e){ console.warn('BINARY parse failed', e); }
-  return null;
+    return fromSheet(sh);
+  }catch(e){ console.warn(e); return null; }
 }
-
 async function handleExcel(file){
+  loadInfo.textContent="Excel okunuyor…";
   const parsed = await parseExcelFile(file);
-  if(!parsed){ showToast('Excel okunamadı veya boş sayfa.', true); return; }
-  const headers = parsed.headers;
-  const draft = detectColumns(headers);
-  if(!draft.barcode || !draft.name || !draft.shelf){
-    openMapModal(headers, draft, (manual)=> finalizeData(parsed.dataRows, manual));
+  if(!parsed){ showToast('Excel okunamadı', true); loadInfo.textContent="Hata"; return; }
+  const map = detectColumns(parsed.headers);
+  if(!map.barcode || !map.name || !map.shelf){
+    openMapForHeaders(parsed.headers, map, (manual)=> indexRowsFromArray(parsed.dataRows, parsed.headers, manual));
   } else {
-    finalizeData(parsed.dataRows, draft);
+    indexRowsFromArray(parsed.dataRows, parsed.headers, map);
   }
 }
-function finalizeData(rowsRaw, map){
-  state.rawHeaders = map;
-  state.rows = normalizeRows(rowsRaw, map);
-  renderTable();
-  showToast('Excel yüklendi');
-}
 
-/* ==== ÜRÜN & RAF ==== */
+/* ÜRÜN POPUP (liste yok; sadece okutunca) */
 function openProduct(barcode){
-  const r = state.byBarcode.get(pad13(barcode)); if(!r) return;
+  const r = state.byBarcode.get(pad13(barcode));
+  if(!r) return;
   state.selectedProduct = r;
   const body=document.getElementById('prodBody');
   body.innerHTML = `
     <div class="grid md:grid-cols-2 gap-2">
       <div><div class="text-xs text-slate-500">Barkod</div><div class="font-mono">${r.barcode}</div></div>
-      <div><div class="text-xs text-slate-500">Raf Kodu</div><div class="text-2xl font-bold">${escapeHtml(r.shelf||'')}</div></div>
+      <div><div class="text-xs text-slate-500">Raf Kodu (Modeli)</div><div class="text-2xl font-bold">${escapeHtml(r.shelf||'')}</div></div>
       <div class="md:col-span-2"><div class="text-xs text-slate-500">Ürün Adı</div><div>${escapeHtml(r.name||'')}</div></div>
       <div><div class="text-xs text-slate-500">Mağaza (Fiyat)</div><div>${escapeHtml(r.price||'')}</div></div>
       <div><div class="text-xs text-slate-500">Fiyat Değ. Tarihi</div><div>${escapeHtml(r.priceDate||'')}</div></div>
@@ -422,16 +402,7 @@ function openProduct(barcode){
   dlgProduct.showModal();
 }
 
-function applyShelfTo(barcode, shelf){
-  const r=state.byBarcode.get(pad13(barcode)); if(!r) return;
-  const old=r.shelf||''; if(old===shelf) return;
-  r.shelf = shelf; pushRecentShelf(shelf); state.lastShelves = loadRecentShelves();
-  const who = whoInput.value.trim();
-  const ts = new Date().toISOString();
-  state.changes.set(r.barcode, {oldShelf:old, newShelf:shelf, name:r.name, ts, who});
-  renderTable();
-}
-
+/* RAF SEÇİMİ */
 const letters = Array.from({length:26}, (_,i)=> String.fromCharCode(65+i));
 function buildShelfUI(){
   const grid = dlgShelf.querySelector('.grid.grid-cols-13');
@@ -443,49 +414,43 @@ function buildShelfUI(){
     const nums=document.getElementById('nums'); nums.innerHTML='';
     for(let i=1;i<=10;i++){ const b=document.createElement('button'); b.className='px-3 py-2 rounded-lg bg-slate-100'; b.textContent=String(i); b.onclick=()=>{ dlgShelf.dataset.number=String(i); }; nums.appendChild(b); }
   }
-  renderRecentShelves();
+  // Son kullanılanlar
+  const wrap=document.getElementById('recentShelves'); wrap.innerHTML='';
+  for(const c of state.lastShelves){ const b=document.createElement('button'); b.className='px-3 py-1.5 rounded-lg bg-slate-100'; b.textContent=c; b.onclick=()=>{ dlgShelf.dataset.letter=c.split('-')[0]; dlgShelf.dataset.number=c.split('-')[1]; }; wrap.appendChild(b); }
 }
 function openShelfDialog(){ buildShelfUI(); dlgShelf.showModal(); }
 document.getElementById('btnShelfApply').addEventListener('click', ()=>{
   const L = dlgShelf.dataset.letter, N = dlgShelf.dataset.number;
-  if(!L || !N){ showToast('Lütfen raf harfi ve numarası seçin', true); return; }
+  if(!L || !N){ showToast('Raf harfi ve numarası seçin', true); return; }
   const code = `${L}-${N}`;
   dlgShelf.close();
   if(state.selectedProduct){ applyShelfTo(state.selectedProduct.barcode, code); dlgProduct.close(); }
   else if(state.bulkItems.size>0){
     for(const bc of state.bulkItems){ applyShelfTo(bc, code); }
-    state.bulkItems.clear(); bulkCount.textContent='0 öğe'; bulkCount.classList.add('hidden');
+    state.bulkItems.clear(); bulkCount.textContent='0'; bulkCount.classList.add('hidden');
   }
 });
+function applyShelfTo(barcode, shelf){
+  const r=state.byBarcode.get(pad13(barcode)); if(!r) return;
+  const old=r.shelf||''; if(old===shelf) return;
+  r.shelf = shelf; pushRecentShelf(shelf);
+  const who = whoInput.value.trim();
+  const ts = new Date().toISOString();
+  state.changes.set(r.barcode, {oldShelf:old, newShelf:shelf, name:r.name, ts, who});
+}
 
-/* ==== ARAMA ==== */
-const searchInput=document.getElementById('searchInput');
-searchInput.addEventListener('input', ()=>{
-  const q=searchInput.value.trim().toLowerCase();
-  const box=document.getElementById('searchResults'); box.innerHTML='';
-  if(!q) return;
-  const hits=state.rows.filter(r=> r.barcode.includes(q) || (r.name||'').toLowerCase().includes(q)).slice(0,50);
-  for(const r of hits){
-    const div=document.createElement('div');
-    div.className='px-3 py-2 border-b hover:bg-slate-50 cursor-pointer';
-    div.innerHTML=`<div class='font-mono text-xs text-slate-500'>${r.barcode}</div><div>${escapeHtml(r.name||'')}</div>`;
-    div.onclick=()=> openProduct(r.barcode);
-    box.appendChild(div);
-  }
-});
-
-/* ==== TOPLU ADRESLE ==== */
+/* TOPLU ADRESLE */
 bulkChk.checked=false;
 bulkChk.addEventListener('change', ()=>{
-  if(!bulkChk.checked){ state.bulkItems.clear(); bulkCount.classList.add('hidden'); bulkCount.textContent='0 öğe'; }
+  if(!bulkChk.checked){ state.bulkItems.clear(); bulkCount.classList.add('hidden'); bulkCount.textContent='0'; }
 });
 
-/* ==== KAMERA ==== */
+/* KAMERA */
 let stream=null, detector=null, rafId=null, torchOn=false, track=null;
 function secureOk(){ return location.protocol==='https:' || location.hostname==='localhost' || location.hostname==='127.0.0.1'; }
 async function openCameraModal(){
-  if(!secureOk()){ alert('Kamera için sayfayı HTTPS veya localhost üzerinden açın. Örn: python -m http.server'); return; }
-  if(!('BarcodeDetector' in window)){ document.getElementById('scanStatus').textContent='Bu cihazda BarcodeDetector desteklenmiyor'; }
+  if(!secureOk()){ alert('Kamera için HTTPS/localhost şart'); return; }
+  if(!('BarcodeDetector' in window)){ document.getElementById('scanStatus').textContent='Bu cihazda BarcodeDetector yok'; }
   try { detector = new BarcodeDetector({formats:['ean_13','upc_a']}); } catch(_) {}
   camModal.showModal();
   try{
@@ -520,14 +485,13 @@ async function scanLoop(){
 function handleScan(value){
   const raw = String(value).replace(/\D/g,'');
   if(!(raw.length===12 || raw.length===13)) { showToast('⛔ Okunamadı', true); return; }
-  const ean13 = pad13(raw);
-  let r = state.byBarcode.get(ean13);
-  if(!r && raw.length===12){ r = state.byBarcode.get('0'+raw); }
+  const ean13 = raw.length===12 ? ('0'+raw) : raw;
   document.getElementById('lastBox').textContent = ean13;
+  const r = state.byBarcode.get(ean13);
   if(!r){ showToast('⛔ ERP’de yok', true); return; }
   if(bulkChk.checked){
     state.bulkItems.add(r.barcode);
-    bulkCount.classList.remove('hidden'); bulkCount.textContent = `${state.bulkItems.size} öğe`;
+    bulkCount.classList.remove('hidden'); bulkCount.textContent = `${state.bulkItems.size}`;
     showToast('✅ Okundu');
   } else {
     openProduct(r.barcode);
@@ -539,11 +503,15 @@ async function toggleTorch(){
   catch(e){ showToast('Fener desteklenmiyor'); }
 }
 
-/* ==== KAYDETME ==== */
+/* KAYDETME */
 function enableSavesIfReady(){ const has=state.rows && state.rows.length>0; btnSaveAll.disabled=!has; btnSaveChanges.disabled=!has; }
 function buildFullWorkbook(){
-  const hdr=state.rawHeaders;
-  const rows=state.rows.map(r=>{ const o=Object.assign({}, r.__raw); if(hdr.shelf) o[hdr.shelf]=r.shelf||''; return o; });
+  // Orijinal başlıklara yazar, raf=Modeli alanını güncelleyerek
+  const rows = state.rows.map(r=>{
+    const o = Object.assign({}, r.__raw);
+    if(state.map.shelf) o[state.map.shelf]=r.shelf||'';
+    return o;
+  });
   const ws=XLSX.utils.json_to_sheet(rows, {skipHeader:false});
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Veri'); return wb;
 }
@@ -558,35 +526,6 @@ function buildChangesWorkbook(){
 }
 function downloadWb(wb,name){ XLSX.writeFile(wb,name); }
 
-/* ==== PERSIST ==== */
-function persist(){
-  try{
-    localStorage.setItem('rows', JSON.stringify(state.rows));
-    localStorage.setItem('changes', JSON.stringify(Array.from(state.changes.entries())));
-    localStorage.setItem('rawHeaders', JSON.stringify(state.rawHeaders||{}));
-  }catch{}
-}
-function restore(){
-  try{
-    const rows = JSON.parse(localStorage.getItem('rows')||'[]');
-    const changes = new Map(JSON.parse(localStorage.getItem('changes')||'[]'));
-    const hdr = JSON.parse(localStorage.getItem('rawHeaders')||'{}');
-    if(rows && rows.length){
-      state.rows = rows; state.rawHeaders = hdr;
-      state.byBarcode.clear(); for(const r of rows){ state.byBarcode.set(r.barcode, r); }
-      for(const [k,v] of changes){ state.changes.set(k,v); }
-      renderTable(); return true;
-    }
-  }catch{}
-  return false;
-}
-
-/* ==== EVENT BINDINGS ==== */
-btnOpenCam.addEventListener('click', openCameraModal);
-btnCloseCam.addEventListener('click', ()=>{ stopCamera(); camModal.close(); });
-btnTorch.addEventListener('click', toggleTorch);
-btnReloadSheets.addEventListener('click', loadSheets);
-fileInput.addEventListener('change', (e)=>{ const f=e.target.files?.[0]; if(!f) return; handleExcel(f); });
 btnSaveAll.addEventListener('click', ()=>{
   const who=whoInput.value.trim(); if(!who){ showToast('"Kim Adresledi" boş olamaz', true); return; }
   for(const [bc,ch] of state.changes){ if(!ch.who) ch.who=who; }
@@ -598,8 +537,15 @@ btnSaveChanges.addEventListener('click', ()=>{
   const wb=buildChangesWorkbook(); downloadWb(wb, 'Degisiklikler.xlsx');
 });
 
-/* ==== INIT ==== */
-if(!restore()){ loadSheets(); } // localStorage’da veri varsa onu göster, yoksa Sheets’i çek
+/* EVENTLER */
+btnOpenCam.addEventListener('click', openCameraModal);
+btnCloseCam.addEventListener('click', ()=>{ stopCamera(); camModal.close(); });
+btnTorch.addEventListener('click', toggleTorch);
+btnReloadSheets.addEventListener('click', loadSheetsFast);
+fileInput.addEventListener('change', (e)=>{ const f=e.target.files?.[0]; if(!f) return; handleExcel(f); });
+
+/* BAŞLANGIÇ */
+loadSheetsFast(); // açılışta arka planda indir & indeksle
 </script>
 </body>
 </html>
