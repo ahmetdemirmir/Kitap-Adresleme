@@ -3,32 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Raf Atama Sistemi</title>
-  <!-- Correct XLSX CDN -->
+  <title>Raf Atama Sistemi — ZXing</title>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
 </head>
 <body>
-  <h1>📦 Raf Atama Sistemi</h1>
-  <label for="file">Excel Yükle (XLSX)</label>
-  <input id="file" type="file" accept=".xlsx,.xls" />
-  <p>Durum: <span id="status">Dosya bekleniyor</span></p>
-  <script>
-    document.getElementById("file").addEventListener("change", async (e)=>{
-      const f = e.target.files?.[0];
-      if(!f){ document.getElementById("status").textContent = "Dosya bekleniyor"; return; }
-      try{
-        document.getElementById("status").textContent = "Excel okunuyor...";
-        const data = await f.arrayBuffer();
-        const wb = XLSX.read(data);
-        const sheetName = wb.SheetNames[0];
-        const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {defval:""});
-        document.getElementById("status").textContent = "Excel yüklendi • Satır: "+rows.length;
-        console.log(rows);
-      }catch(err){
-        document.getElementById("status").textContent = "Excel yüklenemedi";
-        alert("Excel yüklenemedi: "+err.message);
-      }
-    });
-  </script>
+  <h1>Raf Atama Sistemi — ZXing</h1>
+  <p>Bu dosya, tam sürüm için temel iskelet ve doğru kütüphaneleri içerir.</p>
 </body>
 </html>
