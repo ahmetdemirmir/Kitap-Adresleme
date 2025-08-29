@@ -65,7 +65,9 @@
       <div class="flex items-center gap-2">
         <label class="text-sm">Kim Adresledi</label>
         <input id="whoInput" type="text" class="px-3 py-1.5 border rounded-lg text-sm" placeholder="Ad Soyad" />
-      </div>
+      
+      <input id="bulkChk" type="checkbox" class="hidden" />
+</div>
     </div>
     <div class="flex items-center gap-3">
       <span id="loadInfo" class="text-xs text-slate-500">Hazır değil</span>
@@ -185,6 +187,7 @@ const SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSCE485ORNI2
 
 /* ==== Refs ==== */
 const btnReloadSheets = document.getElementById('btnReloadSheets');
+const bulkChk = document.getElementById('bulkChk');
 const fileInput = document.getElementById('fileInput');
 const whoInput = document.getElementById('whoInput');
 const btnSaveAll = document.getElementById('btnSaveAll');
