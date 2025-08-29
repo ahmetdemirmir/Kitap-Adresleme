@@ -65,9 +65,7 @@
       <div class="flex items-center gap-2">
         <label class="text-sm">Kim Adresledi</label>
         <input id="whoInput" type="text" class="px-3 py-1.5 border rounded-lg text-sm" placeholder="Ad Soyad" />
-      
-      <input id="bulkChk" type="checkbox" class="hidden" />
-</div>
+      </div>
     </div>
     <div class="flex items-center gap-3">
       <span id="loadInfo" class="text-xs text-slate-500">Hazır değil</span>
@@ -78,15 +76,16 @@
 
   <section class="bg-white/90 rounded-2xl shadow p-4">
     <div class="flex items-center gap-2 mb-2">
-  <button id="btnOpenCam" class="px-4 py-2 rounded-xl font-medium shadow text-white" style="background:var(--brand2)">
-    <i class="fa-solid fa-camera"></i> Kamerayı Aç (Popup)
-  </button>
-  <!-- Yeni: Barkod yaz/okut alanı (kamera akışına birebir bağlı) -->
-  <input id="manualBarcode" type="text" inputmode="numeric" pattern="\d*"
-         class="px-3 py-2 border rounded-lg text-sm w-[220px]"
-         placeholder="Barkodu yaz/okut" autocomplete="off" />
-  <span id="scanStatus" class="text-xs text-slate-600 ml-2"></span>
-</div>
+      <button id="btnOpenCam" class="px-4 py-2 rounded-xl font-medium shadow text-white" style="background:var(--brand2)">
+        <i class="fa-solid fa-camera"></i> Kamerayı Aç (Popup)
+      </button>
+<!-- Manuel barkod alanı: kamera akışıyla birebir aynı -->
+<input id="manualBarcode" type="text" inputmode="numeric" pattern="\d*"
+       class="px-3 py-2 border rounded-lg text-sm w-[220px]"
+       placeholder="Barkodu yaz/okut" autocomplete="off" />
+
+      <span id="scanStatus" class="text-xs text-slate-600 ml-2"></span>
+    </div>
     <div class="text-xs text-slate-500">
       Sadece EAN-13 / UPC-A. Debounce: 1sn. <span class="text-[11px] text-slate-400">Kamera için HTTPS veya localhost gerekir.</span>
     </div>
@@ -187,7 +186,6 @@ const SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSCE485ORNI2
 
 /* ==== Refs ==== */
 const btnReloadSheets = document.getElementById('btnReloadSheets');
-const bulkChk = document.getElementById('bulkChk');
 const fileInput = document.getElementById('fileInput');
 const whoInput = document.getElementById('whoInput');
 const btnSaveAll = document.getElementById('btnSaveAll');
@@ -449,22 +447,27 @@ document.getElementById('btnShelfApply').addEventListener('click', ()=>{
 });
 
 
-/* ==== Manuel barkod alanı (kamera ile aynı akış) ==== */
+/* ==== Manuel barkod alanı (kamera akışına bağlandı) ==== */
 let manualTimer=null;
+function normalizeEan(val){
+  const d=(val||"").replace(/\D/g,"");
+  if(d.length===13) return d;
+  if(d.length===12) return '0'+d;
+  if(d.length>13) return d.slice(-13);
+  return null;
+}
 function triggerManualScan(){
-  const digits = (manualInput.value||"").replace(/\D/g,"");
-  if(digits.length<12) return;
-  const val = digits.length===12 ? ('0'+digits) : digits.slice(-13);
-  handleScan(val);
-  manualInput.value="";
+  const code=normalizeEan(manualInput?.value||"");
+  if(!code) return;
+  // KAMERA İLE AYNI GİRİŞ NOKTASI
+  try{ handleScan(code); }catch(e){ console.error(e); }
+  if(manualInput) manualInput.value="";
 }
 function onManualInputDebounced(){
   if(manualTimer) clearTimeout(manualTimer);
-  manualTimer = setTimeout(()=>{
-    triggerManualScan();
-  }, 220);
+  manualTimer = setTimeout(()=>{ triggerManualScan(); }, 220);
 }
-if(manualInput){
+if(typeof manualInput!=='undefined' && manualInput){
   manualInput.addEventListener('input', onManualInputDebounced);
   manualInput.addEventListener('keydown', (e)=>{
     if(e.key==='Enter'){ e.preventDefault(); triggerManualScan(); }
@@ -530,11 +533,9 @@ function handleScan(value){
     state.bulkItems.add(r.barcode);
     bulkCount.classList.remove('hidden'); bulkCount.textContent = String(state.bulkItems.size);
     showCamBanner('✅ Okundu', true);
-} else {
-    // TEKLI MOD: İLK POPUP HER ZAMAN GÖRÜNSÜN (raf boşsa da)
-    showCamBanner('✅ Okundu', true);
-    openProduct(r.barcode);
-}
+  } else {
+    // TEKLI MOD: raf boşsa direkt adresle; varsa eskisi gibi ürün popup
+    if(!r.shelf){ state.selectedProduct = r; openShelfDialog(); }
     else { showCamBanner('✅ Okundu', true); openProduct(r.barcode); }
   }
 }
