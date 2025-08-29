@@ -527,9 +527,11 @@ function handleScan(value){
     state.bulkItems.add(r.barcode);
     bulkCount.classList.remove('hidden'); bulkCount.textContent = String(state.bulkItems.size);
     showCamBanner('✅ Okundu', true);
-  } else {
-    // TEKLI MOD: raf boşsa direkt adresle; varsa eskisi gibi ürün popup
-    if(!r.shelf){ state.selectedProduct = r; openShelfDialog(); }
+} else {
+    // TEKLI MOD: İLK POPUP HER ZAMAN GÖRÜNSÜN (raf boşsa da)
+    showCamBanner('✅ Okundu', true);
+    openProduct(r.barcode);
+}
     else { showCamBanner('✅ Okundu', true); openProduct(r.barcode); }
   }
 }
