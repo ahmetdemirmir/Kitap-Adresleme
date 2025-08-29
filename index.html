@@ -25,12 +25,6 @@
   #overlayFrame::after{content:"";position:absolute;left:10%;right:10%;top:18%;height:64%;border:3px dashed #10b981;border-radius:1rem;box-shadow:0 0 0 9999px rgba(0,0,0,.35) inset;pointer-events:none}
 
   /* Raf seçim – büyük butonlar */
-  
-/* ==== Raf Dialog güvenli alan & sticky footer (SAFE) ==== */
-#dlgShelf { padding: 0; }
-#dlgShelf > div { max-height: calc(100dvh - 32px); overflow:auto; border-radius: 16px; }
-#dlgShelf .footer { position: sticky; bottom: 0; background:#fff; padding-top:8px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
-
   .shelf-btn{padding:.6rem .9rem;border-radius:.75rem;background:#f1f5f9}
   .shelf-btn.active{background:#0ea5e9;color:#fff}
   .nums-wrap{max-height:180px;overflow-y:auto}
@@ -40,6 +34,12 @@
     font-weight:700; font-size:18px; letter-spacing:.3px; color:#fff; display:none;}
   #camBanner.ok{background:linear-gradient(180deg, rgba(16,185,129,.85), rgba(5,150,105,.95));}
   #camBanner.err{background:linear-gradient(180deg, rgba(239,68,68,.9), rgba(185,28,28,.95));}
+
+/* ==== Raf Diyalog: Sticky footer + safe-area ==== */
+#dlgShelf { padding: 0; }
+#dlgShelf > div { max-height: calc(100dvh - 32px); overflow:auto; border-radius: 16px; }
+#dlgShelf .footer { position: sticky; bottom: 0; background: #fff; padding-top: 8px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+
 </style>
 </head>
 <body class="min-h-screen bg-slate-50 text-slate-900">
@@ -85,10 +85,10 @@
       <button id="btnOpenCam" class="px-4 py-2 rounded-xl font-medium shadow text-white" style="background:var(--brand2)">
         <i class="fa-solid fa-camera"></i> Kamerayı Aç (Popup)
       </button>
-  <!-- Manuel barkod alanı: kamera akışıyla birebir aynı -->
-  <input id="manualBarcode" type="text" inputmode="numeric" pattern="\d*"
-         class="px-3 py-2 border rounded-lg text-sm w-[220px]"
-         placeholder="Barkodu yaz/okut" autocomplete="off" />
+<!-- Manuel barkod alanı: kamera akışıyla birebir aynı -->
+<input id="manualBarcode" type="text" inputmode="numeric" pattern="\d*"
+       class="px-3 py-2 border rounded-lg text-sm w-[220px]"
+       placeholder="Barkodu yaz/okut" autocomplete="off" />
 
       <span id="scanStatus" class="text-xs text-slate-600 ml-2"></span>
     </div>
@@ -296,33 +296,15 @@ function openMapForHeaders(headers, mapDraft, onApply){
 async function loadSheetsFast(){
   loadInfo.textContent="Sheets alınıyor…";
   try{
-    const u = new URL(SHEETS_URL);
-    u.searchParams.set('cb', Date.now().toString());
-    const ctrl = new AbortController();
-    const tid = setTimeout(()=>ctrl.abort(new Error('timeout')), 12000);
-
-    const res = await fetch(u.toString(), { cache:'no-store', mode:'cors', redirect:'follow', signal: ctrl.signal });
-    clearTimeout(tid);
-    if(!res.ok) throw new Error('HTTP '+res.status);
-
-    const text = await res.text();
-    if(/<html/i.test(text.slice(0,200))) throw new Error('CSV yerine HTML döndü. "Web’e yayımla" ve herkese açık olduğundan emin olun.');
-
-    const wb = XLSX.read(text, {type:'string'});
-    const sh = wb.Sheets[wb.SheetNames[0]];
+    const res = await fetch(SHEETS_URL, {cache:'no-store'}); if(!res.ok) throw new Error('HTTP '+res.status);
+    const csv = await res.text();
+    const wb = XLSX.read(csv, {type:'string'}); const sh=wb.Sheets[wb.SheetNames[0]];
     const json = XLSX.utils.sheet_to_json(sh, {defval:'', raw:false});
     if(!json.length){ showToast('Sheets boş', true); return; }
-
-    const headers = Object.keys(json[0]||{});
-    const map = detectColumns(headers);
+    const headers = Object.keys(json[0]||{}); const map = detectColumns(headers);
     const rows2d = [headers].concat(json.map(o=> headers.map(h=> o[h])));
     indexWithHeaders(rows2d, headers, map);
-    loadInfo.textContent="Yüklendi";
-  }catch(e){
-    console.error(e);
-    showToast('Sheets alınamadı: ' + (e?.message||e), true);
-    loadInfo.textContent="Hata";
-  }
+  }catch(e){ console.error(e); showToast('Sheets alınamadı', true); loadInfo.textContent="Hata"; }
 }
 
 /* ==== Excel yükleme ==== */
@@ -418,8 +400,7 @@ function openProduct(barcode){
   document.getElementById('btnShelfChange').style.display = r.shelf? 'inline-flex':'none';
   const bGive=document.getElementById('btnGiveShelf'); if(bGive) bGive.onclick=()=> openShelfDialog();
   document.getElementById('btnShelfChange').onclick=()=> openShelfDialog();
-  document.getElementById('btnShelfOk').onclick=()=> { dlgProduct.close();
-  try{ if(!stream && manualInput){ manualInput.focus(); manualInput.select && manualInput.select(); } }catch{} };
+  document.getElementById('btnShelfOk').onclick=()=> { dlgProduct.close(); };
   dlgProduct.showModal();
 }
 
@@ -464,7 +445,6 @@ document.getElementById('btnShelfApply').addEventListener('click', ()=>{
   if(state.selectedProduct){
     applyShelfTo(state.selectedProduct.barcode, code);
     dlgProduct.close();
-  try{ if(!stream && manualInput){ manualInput.focus(); manualInput.select && manualInput.select(); } }catch{}
   } else if(state.bulkItems.size){
     for(const bc of state.bulkItems){ applyShelfTo(bc, code); }
     state.bulkItems.clear(); bulkCount.classList.add('hidden'); bulkCount.textContent='0';
@@ -485,8 +465,9 @@ function normalizeEan(val){
 function triggerManualScan(){
   const code=normalizeEan(manualInput?.value||"");
   if(!code) return;
+  // KAMERA İLE AYNI GİRİŞ NOKTASI
   try{ handleScan(code); }catch(e){ console.error(e); }
-  if(manualInput){ manualInput.value=""; }
+  if(manualInput) manualInput.value="";
 }
 function onManualInputDebounced(){
   if(manualTimer) clearTimeout(manualTimer);
@@ -607,3 +588,21 @@ loadSheetsFast();
 </script>
 </body>
 </html>
+
+
+/* ==== Son Kullanılanlar: güvenli tıklama ==== */
+(function(){
+  const cont = document.getElementById('recentShelves');
+  if(!cont) return;
+  cont.addEventListener('click', function(ev){
+    const btn = ev.target.closest('button');
+    if(!btn) return;
+    const code = btn.textContent?.trim();
+    if(!code || !code.includes('-')) return;
+    const [L,N] = code.split('-');
+    dlgShelf.dataset.letter = L;
+    dlgShelf.dataset.number = N;
+    if(typeof highlightLetter==='function') highlightLetter(L);
+    if(typeof highlightNumber==='function') highlightNumber(N);
+  }, {passive:true});
+})();
