@@ -26,7 +26,7 @@
 
   /* Raf seçim – büyük butonlar */
   
-/* ==== Raf Dialog güvenli alan & sticky footer ==== */
+/* ==== Raf Dialog güvenli alan & sticky footer (SAFE) ==== */
 #dlgShelf { padding: 0; }
 #dlgShelf > div { max-height: calc(100dvh - 32px); overflow:auto; border-radius: 16px; }
 #dlgShelf .footer { position: sticky; bottom: 0; background:#fff; padding-top:8px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
@@ -85,10 +85,10 @@
       <button id="btnOpenCam" class="px-4 py-2 rounded-xl font-medium shadow text-white" style="background:var(--brand2)">
         <i class="fa-solid fa-camera"></i> Kamerayı Aç (Popup)
       </button>
-<!-- Manuel barkod alanı: kamera akışıyla birebir aynı -->
-<input id="manualBarcode" type="text" inputmode="numeric" pattern="\d*"
-       class="px-3 py-2 border rounded-lg text-sm w-[220px]"
-       placeholder="Barkodu yaz/okut" autocomplete="off" />
+  <!-- Manuel barkod alanı: kamera akışıyla birebir aynı -->
+  <input id="manualBarcode" type="text" inputmode="numeric" pattern="\d*"
+         class="px-3 py-2 border rounded-lg text-sm w-[220px]"
+         placeholder="Barkodu yaz/okut" autocomplete="off" />
 
       <span id="scanStatus" class="text-xs text-slate-600 ml-2"></span>
     </div>
@@ -224,16 +224,17 @@ const state = {
 /* ==== Helpers ==== */
 function showToast(msg, persist=false){ const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block'; if(!persist){ setTimeout(()=>{ t.style.display='none'; }, 1100); } }
 function loadRecentShelves(){ try{ return JSON.parse(localStorage.getItem('recentShelves')||'[]'); }catch{ return []; } }
-function pushRecentShelf(code){
+function pushRecentShelf(code){ const a=loadRecentShelves(); const i=a.indexOf(code); if(i>=0) a.splice(i,1); a.unshift(code); while(a.length>5) a.pop(); localStorage.setItem('recentShelves', JSON.stringify(a)); state.lastShelves=a; }
+function toStr(v){ return v==null?"":String(v).trim(); }
+function parseDateCell(v){ if(v==null||v==="") return ""; const formats=["DD.MM.YYYY","D.M.YYYY","YYYY-MM-DD","DD/MM/YYYY","D/M/YYYY"]; for(const f of formats){ const d=dayjs(v,f,true); if(d.isValid()) return d.format("DD/MM/YYYY"); } if(typeof v==='number'){ const d=dayjs('1899-12-30').add(v,'day'); return d.format("DD/MM/YYYY"); } const d2=dayjs(v); return d2.isValid()? d2.format("DD/MM/YYYY"): String(v);}
+function pad13(bc){ const s=String(bc||"").replace(/\D/g,""); if(s.length===13) return s; if(s.length===12) return '0'+s; return s; }
+function persist(){
   try{
-    const a = loadRecentShelves();
-    const i = a.indexOf(code);
-    if(i !== -1) a.splice(i,1);
-    a.unshift(code);
-    while(a.length > 5) a.pop();
-    localStorage.setItem('recentShelves', JSON.stringify(a));
-    state.lastShelves = a;
-  }catch(e){ console.error(e); }
+    localStorage.setItem('rows', JSON.stringify(state.rows));
+    localStorage.setItem('changes', JSON.stringify(Array.from(state.changes.entries())));
+    localStorage.setItem('headers', JSON.stringify(state.headers));
+    localStorage.setItem('map', JSON.stringify(state.map));
+  }catch{}
 }
 function ensureWho(){
   let who = whoInput.value.trim();
@@ -450,7 +451,6 @@ document.getElementById('btnShelfApply').addEventListener('click', ()=>{
     for(const bc of state.bulkItems){ applyShelfTo(bc, code); }
     state.bulkItems.clear(); bulkCount.classList.add('hidden'); bulkCount.textContent='0';
     showToast('Toplu atama yapıldı');
-  try{ if(!stream && manualInput){ manualInput.focus(); manualInput.select && manualInput.select(); } }catch{}
   }
 });
 
@@ -467,9 +467,8 @@ function normalizeEan(val){
 function triggerManualScan(){
   const code=normalizeEan(manualInput?.value||"");
   if(!code) return;
-  // KAMERA İLE AYNI GİRİŞ NOKTASI
   try{ handleScan(code); }catch(e){ console.error(e); }
-  if(manualInput) manualInput.value="";
+  if(manualInput){ manualInput.value=""; }
 }
 function onManualInputDebounced(){
   if(manualTimer) clearTimeout(manualTimer);
