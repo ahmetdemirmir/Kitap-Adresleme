@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Demir Kırtasiye • Raf Adresleme</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/customParseFormat.js"></script>
+<script>dayjs.extend(dayjs_plugin_customParseFormat)</script>
+<style>
+  :root{ --brand:#E11D48; --brand2:#1D4ED8; }
+  .brand-gradient{background:linear-gradient(90deg,var(--brand),var(--brand2));}
+  dialog::backdrop{ background:rgba(0,0,0,.55); }
+  dialog{ border:none; border-radius:1rem; padding:0; }
+  #toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:1rem; z-index:9999; display:none; }
+
+  /* Kamera modal */
+  #camModal .wrap{width:min(92vw,520px); height:min(80vh,760px); background:#111; border-radius:1rem; overflow:hidden; display:flex; flex-direction:column}
+  #camModal .head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#0b1220;color:#fff}
+  #camModal .body{position:relative; flex:1; background:#000}
+  #camModal video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  #overlayFrame::after{content:"";position:absolute;left:10%;right:10%;top:18%;height:64%;border:3px dashed #10b981;border-radius:1rem;box-shadow:0 0 0 9999px rgba(0,0,0,.35) inset;pointer-events:none}
+
+  /* Raf seçim – büyük butonlar */
+  .shelf-btn{padding:.6rem .9rem;border-radius:.75rem;background:#f1f5f9}
+  .shelf-btn.active{background:#0ea5e9;color:#fff}
+  .nums-wrap{max-height:180px;overflow-y:auto}
+
+  /* Kamera alt bandı (büyük uyarı) */
+  #camBanner{position:absolute; left:0; right:0; bottom:0; padding:14px 16px; text-align:center;
+    font-weight:700; font-size:18px; letter-spacing:.3px; color:#fff; display:none;}
+  #camBanner.ok{background:linear-gradient(180deg, rgba(16,185,129,.85), rgba(5,150,105,.95));}
+  #camBanner.err{background:linear-gradient(180deg, rgba(239,68,68,.9), rgba(185,28,28,.95));}
+</style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900">
+<header class="brand-gradient text-white">
+  <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <h1 class="text-xl md:text-2xl font-bold">Demir Kırtasiye • Raf Adresleme</h1>
+    </div>
+    <div class="text-xs opacity-90">BarcodeDetector • EAN-13 / UPC-A</div>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-6 grid gap-6">
+  <section class="bg-white/90 rounded-2xl shadow p-4 flex flex-col md:flex-row md:items-center gap-3 justify-between">
+    <div class="flex flex-wrap items-center gap-3">
+      <button id="btnReloadSheets" class="px-4 py-2 rounded-xl font-medium shadow bg-slate-100">
+        <i class="fa-solid fa-database"></i> Veriyi Yükle (Sheets)
+      </button>
+      <label class="px-4 py-2 rounded-xl font-medium shadow bg-slate-100 cursor-pointer flex items-center gap-2">
+        <i class="fa-solid fa-file-arrow-up"></i><span>Excel Yükle</span>
+        <input id="fileInput" type="file" accept=".xlsx,.xls,.xlsm,.xlsb" class="hidden" />
+      </label>
+      <button id="btnSaveAll" class="px-4 py-2 rounded-xl font-medium shadow text-white disabled:opacity-50" style="background:var(--brand)" disabled>
+        <i class="fa-solid fa-floppy-disk"></i> Excel’e Kaydet (XLSX)
+      </button>
+      <button id="btnSaveChanges" class="px-4 py-2 rounded-xl font-medium shadow bg-slate-100 disabled:opacity-50" disabled>
+        <i class="fa-solid fa-file-export"></i> Değişiklikler.xlsx
+      </button>
+      <div class="flex items-center gap-2">
+        <label class="text-sm">Kim Adresledi</label>
+        <input id="whoInput" type="text" class="px-3 py-1.5 border rounded-lg text-sm" placeholder="Ad Soyad" />
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="loadInfo" class="text-xs text-slate-500">Hazır değil</span>
+      <input id="bulkMode" type="checkbox" class="w-4 h-4"><label for="bulkMode" class="text-sm font-medium">Toplu Adresle</label>
+      <span id="bulkCount" class="text-xs ml-2 hidden bg-slate-100 px-2 py-1 rounded-full">0</span>
+    </div>
+  </section>
+
+  <section class="bg-white/90 rounded-2xl shadow p-4">
+    <div class="flex items-center gap-2 mb-2">
+  <button id="btnOpenCam" class="px-4 py-2 rounded-xl font-medium shadow text-white" style="background:var(--brand2)">
+    <i class="fa-solid fa-camera"></i> Kamerayı Aç (Popup)
+  </button>
+  <!-- Yeni: Barkod yaz/okut alanı (kamera akışına birebir bağlı) -->
+  <input id="manualBarcode" type="text" inputmode="numeric" pattern="\d*"
+         class="px-3 py-2 border rounded-lg text-sm w-[220px]"
+         placeholder="Barkodu yaz/okut" autocomplete="off" />
+  <span id="scanStatus" class="text-xs text-slate-600 ml-2"></span>
+</div>
+    <div class="text-xs text-slate-500">
+      Sadece EAN-13 / UPC-A. Debounce: 1sn. <span class="text-[11px] text-slate-400">Kamera için HTTPS veya localhost gerekir.</span>
+    </div>
+    <div class="mt-3">
+      <div class="font-semibold mb-1">Son Okunan</div>
+      <div id="lastBox" class="border rounded-xl p-3 text-sm text-slate-600">—</div>
+    </div>
+  </section>
+</main>
+
+<!-- Kamera Modal -->
+<dialog id="camModal">
+  <div class="wrap">
+    <div class="head">
+      <div class="font-semibold">Kamera</div>
+      <div class="flex items-center gap-2">
+        <button id="btnTorch" class="px-3 py-1.5 rounded-lg bg-slate-200 hidden text-slate-900"><i class="fa-solid fa-bolt"></i> Fener</button>
+        <button id="btnCloseCam" class="px-3 py-1.5 rounded-lg bg-slate-200 text-slate-900"><i class="fa-solid fa-xmark"></i> Kapat</button>
+      </div>
+    </div>
+    <div class="body">
+      <div id="overlayFrame" class="absolute inset-0 z-10 pointer-events-none"></div>
+      <video id="video" playsinline autoplay muted></video>
+      <div id="camBanner"></div>
+    </div>
+  </div>
+</dialog>
+
+<!-- Raf Seçim Popup -->
+<dialog id="dlgShelf">
+  <div class="p-5 min-w-[320px] md:min-w-[560px]">
+    <div class="flex items-start justify-between">
+      <h2 class="text-lg font-semibold">Raf Seç</h2>
+      <button class="text-slate-500" onclick="document.getElementById('dlgShelf').close()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <div class="mt-4">
+      <div class="text-xs text-slate-500 mb-2">Son kullanılanlar</div>
+      <div id="recentShelves" class="flex flex-wrap gap-2 mb-3"></div>
+
+      <!-- Harfler A–H -->
+      <div id="letters" class="flex flex-wrap gap-2 mb-4"></div>
+
+      <!-- Numaralar 1–50 (scroll) -->
+      <div class="nums-wrap">
+        <div id="nums" class="flex flex-wrap gap-2"></div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 mt-4">
+        <button id="btnShelfApply" class="px-5 py-2 rounded-xl font-medium text-white" style="background:var(--brand)">Uygula</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- Ürün Popup -->
+<dialog id="dlgProduct">
+  <div class="p-5 min-w-[320px] md:min-w-[560px]">
+    <div class="flex items-start justify-between">
+      <h2 class="text-lg font-semibold">Ürün Bilgisi</h2>
+      <button class="text-slate-500" onclick="document.getElementById('dlgProduct').close()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div id="prodBody" class="mt-3 grid gap-2 text-sm"></div>
+    <div class="mt-4 flex items-center justify-end gap-2">
+      <button id="btnShelfOk" class="px-4 py-2 rounded-xl font-medium text-white" style="background:var(--brand)">Raf Doğru</button>
+      <button id="btnShelfChange" class="px-4 py-2 rounded-xl font-medium bg-slate-100">Değiştir</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Manuel Sütun Eşle -->
+<dialog id="mapModal">
+  <div class="p-5 min-w-[320px] md:min-w-[560px]">
+    <div class="flex items-start justify-between">
+      <h2 class="text-lg font-semibold">Sütun Eşle (Manuel)</h2>
+      <button class="text-slate-500" onclick="document.getElementById('mapModal').close()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="mt-3 grid gap-3 text-sm">
+      <div class="grid md:grid-cols-2 gap-3">
+        <label>Barkod: <select id="selBarcode"></select></label>
+        <label>Ürün Adı: <select id="selName"></select></label>
+        <label>Mağaza (Fiyat): <select id="selPrice"></select></label>
+        <label>Fiyat Değ. Tarihi: <select id="selPriceDate"></select></label>
+        <label>Raf Kodu (Modeli): <select id="selShelf"></select></label>
+      </div>
+    </div>
+    <div class="mt-4 flex items-center justify-end gap-2">
+      <button id="btnMapApply" class="px-4 py-2 rounded-xl font-medium text-white" style="background:var(--brand)">Uygula</button>
+    </div>
+  </div>
+</dialog>
+
+<div id="toast" class="bg-black/80 text-white rounded-full px-4 py-2 text-sm"></div>
+
+<script>
+/* ==== Ayarlar ==== */
+const SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSCE485ORNI2xxxHJkrfJy6IBBeso9hQHxfhZ6dkUShRQWngyeyR5VsZI7rKwBy0A/pub?output=csv";
+
+/* ==== Refs ==== */
+const btnReloadSheets = document.getElementById('btnReloadSheets');
+const fileInput = document.getElementById('fileInput');
+const whoInput = document.getElementById('whoInput');
+const btnSaveAll = document.getElementById('btnSaveAll');
+const btnSaveChanges = document.getElementById('btnSaveChanges');
+const bulkChk = document.getElementById('bulkMode');
+const bulkCount = document.getElementById('bulkCount');
+const btnOpenCam = document.getElementById('btnOpenCam');
+const manualInput = document.getElementById('manualBarcode');
+const camModal = document.getElementById('camModal');
+const btnCloseCam = document.getElementById('btnCloseCam');
+const btnTorch = document.getElementById('btnTorch');
+const video = document.getElementById('video');
+const dlgShelf = document.getElementById('dlgShelf');
+const dlgProduct = document.getElementById('dlgProduct');
+const loadInfo = document.getElementById('loadInfo');
+const mapModal = document.getElementById('mapModal');
+const selBarcode = document.getElementById('selBarcode');
+const selName = document.getElementById('selName');
+const selPrice = document.getElementById('selPrice');
+const selPriceDate = document.getElementById('selPriceDate');
+const selShelf = document.getElementById('selShelf');
+const btnMapApply = document.getElementById('btnMapApply');
+
+/* ==== Durum ==== */
+const state = {
+  rows:[], byBarcode:new Map(), headers:[], map:{}, changes:new Map(), bulkItems:new Set(),
+  lastScanAt:0, selectedProduct:null, lastShelves:loadRecentShelves()
+};
+
+/* ==== Helpers ==== */
+function showToast(msg, persist=false){ const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block'; if(!persist){ setTimeout(()=>{ t.style.display='none'; }, 1100); } }
+function loadRecentShelves(){ try{ return JSON.parse(localStorage.getItem('recentShelves')||'[]'); }catch{ return []; } }
+function pushRecentShelf(code){ const a=loadRecentShelves(); const i=a.indexOf(code); if(i>=0) a.splice(i,1); a.unshift(code); while(a.length>5) a.pop(); localStorage.setItem('recentShelves', JSON.stringify(a)); state.lastShelves=a; }
+function toStr(v){ return v==null?"":String(v).trim(); }
+function parseDateCell(v){ if(v==null||v==="") return ""; const formats=["DD.MM.YYYY","D.M.YYYY","YYYY-MM-DD","DD/MM/YYYY","D/M/YYYY"]; for(const f of formats){ const d=dayjs(v,f,true); if(d.isValid()) return d.format("DD/MM/YYYY"); } if(typeof v==='number'){ const d=dayjs('1899-12-30').add(v,'day'); return d.format("DD/MM/YYYY"); } const d2=dayjs(v); return d2.isValid()? d2.format("DD/MM/YYYY"): String(v);}
+function pad13(bc){ const s=String(bc||"").replace(/\D/g,""); if(s.length===13) return s; if(s.length===12) return '0'+s; return s; }
+function persist(){
+  try{
+    localStorage.setItem('rows', JSON.stringify(state.rows));
+    localStorage.setItem('changes', JSON.stringify(Array.from(state.changes.entries())));
+    localStorage.setItem('headers', JSON.stringify(state.headers));
+    localStorage.setItem('map', JSON.stringify(state.map));
+  }catch{}
+}
+function ensureWho(){
+  let who = whoInput.value.trim();
+  if(!who){ who = prompt('Kim Adresledi?'); if(who){ whoInput.value = who; } }
+  return (whoInput.value||'').trim();
+}
+
+/* ==== Ses & titreşim (güçlü) ==== */
+let audioCtx;
+function tone(freq=1000, dur=120, type='sine', gain=0.35){
+  try{
+    audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+    const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+    o.type=type; o.frequency.value=freq;
+    g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(gain, audioCtx.currentTime+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur/1000);
+    o.connect(g).connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + dur/1000);
+  }catch{}
+}
+function haptic(v){ if(navigator.vibrate) try{ navigator.vibrate(v); }catch{} }
+function feedbackOK(){ haptic(40); tone(1600,130,'square',0.45); setTimeout(()=>tone(2000,100,'square',0.35),140); }
+function feedbackERR(){ haptic([70,90,70]); tone(220,260,'sawtooth',0.5); }
+
+/* ==== Sütun eşleme (raf = Modeli) ==== */
+const COLS = {
+  barcode: [/^barkod$/i, /^barkod ?no$/i, /^ean$/i, /^ean-?13$/i, /^barcode$/i],
+  name: [/^stok ?adı$/i, /^ürün ?adı$/i, /^stok ?adi$/i, /^product$/i, /^isim$/i],
+  price: [/^mağaza$/i, /^magaza$/i, /^fiyat$/i, /^satış fiyatı ?1$/i, /^price$/i],
+  priceDate: [/tarih|date/i],
+  shelf: [/^modeli$/i]
+};
+function detectColumns(headers){
+  const map={ barcode:null,name:null,price:null,priceDate:null,shelf:null };
+  headers.forEach(h=>{
+    const Htrim=String(h||"").trim();
+    for(const k of Object.keys(COLS)){
+      if(map[k]) continue;
+      if(COLS[k].some(re=> re.test(Htrim))){
+        map[k]=h; /* orijinal başlığı koy */
+      }
+    }
+  });
+  return map;
+}
+function openMapForHeaders(headers, mapDraft, onApply){
+  const opts = ['—'].concat(headers);
+  function fill(sel, val){ sel.innerHTML = opts.map(o=> `<option value="${o}">${o}</option>`).join(''); sel.value = (val && headers.includes(val)) ? val : '—'; }
+  fill(selBarcode, mapDraft.barcode); fill(selName, mapDraft.name); fill(selPrice, mapDraft.price); fill(selPriceDate, mapDraft.priceDate); fill(selShelf, mapDraft.shelf);
+  mapModal.showModal();
+  btnMapApply.onclick = ()=>{
+    const m={ barcode: selBarcode.value, name: selName.value, price: selPrice.value, priceDate: selPriceDate.value, shelf: selShelf.value };
+    if([m.barcode,m.name,m.shelf].some(v=> v==='—' || !v)){ alert('En az Barkod, Ürün Adı ve Modeli (raf) seçin.'); return; }
+    mapModal.close(); onApply(m);
+  };
+}
+
+/* ==== Sheets yükleme ==== */
+async function loadSheetsFast(){
+  loadInfo.textContent="Sheets alınıyor…";
+  try{
+    const res = await fetch(SHEETS_URL, {cache:'no-store'}); if(!res.ok) throw new Error('HTTP '+res.status);
+    const csv = await res.text();
+    const wb = XLSX.read(csv, {type:'string'}); const sh=wb.Sheets[wb.SheetNames[0]];
+    const json = XLSX.utils.sheet_to_json(sh, {defval:'', raw:false});
+    if(!json.length){ showToast('Sheets boş', true); return; }
+    const headers = Object.keys(json[0]||{}); const map = detectColumns(headers);
+    const rows2d = [headers].concat(json.map(o=> headers.map(h=> o[h])));
+    indexWithHeaders(rows2d, headers, map);
+  }catch(e){ console.error(e); showToast('Sheets alınamadı', true); loadInfo.textContent="Hata"; }
+}
+
+/* ==== Excel yükleme ==== */
+async function handleExcel(file){
+  loadInfo.textContent="Excel okunuyor…";
+  try{
+    const buf=await file.arrayBuffer(); const wb=XLSX.read(new Uint8Array(buf), {type:'array'});
+    const sh=wb.Sheets[wb.SheetNames[0]];
+    const rows2d=XLSX.utils.sheet_to_json(sh,{header:1,defval:'',raw:false});
+    if(!rows2d || !rows2d.length){ showToast('Excel boş', true); loadInfo.textContent="Hata"; return; }
+    const headers=(rows2d[0]||[]).map(x=> String(x||'')); const map=detectColumns(headers);
+    indexWithHeaders(rows2d, headers, map);
+  }catch(e){ console.error(e); showToast('Excel okunamadı', true); loadInfo.textContent="Hata"; }
+}
+
+/* ==== Ortak indeksleyici ==== */
+function indexWithHeaders(rows2d, headers, map){
+  if(!map.barcode || !map.name || !map.shelf){
+    openMapForHeaders(headers, map, (manual)=> indexCore(rows2d, headers, manual));
+  } else {
+    indexCore(rows2d, headers, map);
+  }
+}
+function indexCore(rows2d, headers, map){
+  state.headers=headers; state.map=map;
+  const dataRows = rows2d.slice(1);
+  const H=(h)=> headers.indexOf(h);
+  const idx={ bc:H(map.barcode), nm:H(map.name), pr:H(map.price), dt:H(map.priceDate), sh:H(map.shelf) };
+  state.byBarcode.clear(); state.rows.length=0;
+
+  let i=0; const CHUNK=20000;
+  (function step(){
+    const end=Math.min(i+CHUNK, dataRows.length);
+    for(let r=i;r<end;r++){
+      const row=dataRows[r]; const bc=pad13(row[idx.bc]); if(!bc) continue;
+      const obj={ barcode:bc, name:toStr(row[idx.nm]), price:toStr(row[idx.pr]),
+        priceDate:parseDateCell(row[idx.dt]), shelf:toStr(row[idx.sh]),
+        __raw:Object.fromEntries(headers.map((h,c)=>[h,row[c]])) };
+      if(!state.byBarcode.has(bc)) state.byBarcode.set(bc,obj);
+      state.rows.push(obj);
+    }
+    i=end; loadInfo.textContent=`Yüklendi: ${state.rows.length}`;
+    if(i<dataRows.length) setTimeout(step,0);
+    else { enableSaves(); showToast('Veri hazır'); persist(); }
+  })();
+}
+function enableSaves(){ btnSaveAll.disabled = state.rows.length===0; btnSaveChanges.disabled = state.rows.length===0; }
+
+/* ==== Tek noktadan RAF atama ==== */
+function getShelfHeader(){
+  if(state.map.shelf) return state.map.shelf; // orijinal başlık (boşluk dâhil)
+  // Yedek: headers içinde 'modeli' eşleşmesi ara
+  const hit = state.headers.find(h=> String(h).trim().toLowerCase()==='modeli');
+  return hit || 'Modeli';
+}
+function applyShelfTo(barcode, shelf){
+  barcode = pad13(barcode);
+  const r = state.byBarcode.get(barcode); if(!r) return;
+  const old = r.shelf || '';
+  if(old === shelf) return;
+
+  r.shelf = shelf;
+
+  // __raw içinde ORİJİNAL/Yedek başlıkla güncelle
+  const shelfKey = getShelfHeader();
+  r.__raw[shelfKey] = shelf;
+
+  pushRecentShelf(shelf);
+
+  const who = (whoInput.value||'').trim();
+  const ts = new Date().toISOString();
+  state.changes.set(barcode, { oldShelf: old, newShelf: shelf, name: r.name, ts, who });
+
+  persist();
+}
+
+/* ==== Ürün popup ==== */
+function openProduct(barcode){
+  const r=state.byBarcode.get(pad13(barcode)); if(!r) return;
+  state.selectedProduct=r;
+  const body=document.getElementById('prodBody');
+  body.innerHTML=`
+    <div class="grid md:grid-cols-2 gap-2">
+      <div><div class="text-xs text-slate-500">Barkod</div><div class="font-mono">${r.barcode}</div></div>
+      <div><div class="text-xs text-slate-500">Raf Kodu (Modeli)</div><div class="text-2xl font-bold">${(r.shelf||'')}</div></div>
+      <div class="md:col-span-2"><div class="text-xs text-slate-500">Ürün Adı</div><div>${(r.name||'')}</div></div>
+      <div><div class="text-xs text-slate-500">Mağaza (Fiyat)</div><div>${(r.price||'')}</div></div>
+      <div><div class="text-xs text-slate-500">Fiyat Değ. Tarihi</div><div>${(r.priceDate||'')}</div></div>
+    </div>
+    <div class="mt-3">${r.shelf? '' : '<button id="btnGiveShelf" class="px-3 py-2 rounded-lg bg-slate-100">Raf Kodu Ver</button>'}</div>
+  `;
+  document.getElementById('btnShelfOk').style.display = r.shelf? 'inline-flex':'none';
+  document.getElementById('btnShelfChange').style.display = r.shelf? 'inline-flex':'none';
+  const bGive=document.getElementById('btnGiveShelf'); if(bGive) bGive.onclick=()=> openShelfDialog();
+  document.getElementById('btnShelfChange').onclick=()=> openShelfDialog();
+  document.getElementById('btnShelfOk').onclick=()=> { dlgProduct.close(); };
+  dlgProduct.showModal();
+}
+
+/* ==== Raf seçimi (A–H, 1–50) + Son Kullanılanlar ==== */
+function buildShelfUI(){
+  // Son kullanılanlar
+  const recent=document.getElementById('recentShelves'); recent.innerHTML='';
+  for(const c of state.lastShelves){
+    const b=document.createElement('button'); b.className='shelf-btn'; b.textContent=c;
+    b.onclick=()=>{
+      const [L,N]=c.split('-');
+      dlgShelf.dataset.letter=L; dlgShelf.dataset.number=N;
+      highlightLetter(L); highlightNumber(N);
+    };
+    recent.appendChild(b);
+  }
+  // Harfler
+  const letters = Array.from({length:8},(_,i)=> String.fromCharCode(65+i)); // A..H
+  const Lwrap=document.getElementById('letters'); Lwrap.innerHTML='';
+  for(const L of letters){
+    const b=document.createElement('button'); b.className='shelf-btn'; b.textContent=L;
+    b.onclick=()=> { dlgShelf.dataset.letter=L; highlightLetter(L,b); };
+    Lwrap.appendChild(b);
+  }
+  // Numaralar
+  const Nwrap=document.getElementById('nums'); Nwrap.innerHTML='';
+  for(let i=1;i<=50;i++){
+    const b=document.createElement('button'); b.className='shelf-btn'; b.textContent=String(i);
+    b.onclick=()=> { dlgShelf.dataset.number=String(i); highlightNumber(String(i),b); };
+    Nwrap.appendChild(b);
+  }
+  if(dlgShelf.dataset.letter) highlightLetter(dlgShelf.dataset.letter);
+  if(dlgShelf.dataset.number) highlightNumber(dlgShelf.dataset.number);
+}
+function highlightLetter(L, btn){ const all=document.querySelectorAll('#letters .shelf-btn'); all.forEach(x=>x.classList.remove('active')); if(btn){btn.classList.add('active');} else { for(const x of all){ if(x.textContent===L){ x.classList.add('active'); break; } } } }
+function highlightNumber(N, btn){ const all=document.querySelectorAll('#nums .shelf-btn'); all.forEach(x=>x.classList.remove('active')); if(btn){btn.classList.add('active');} else { for(const x of all){ if(x.textContent===N){ x.classList.add('active'); break; } } } }
+function openShelfDialog(){ buildShelfUI(); dlgShelf.showModal(); }
+document.getElementById('btnShelfApply').addEventListener('click', ()=>{
+  const L=dlgShelf.dataset.letter, N=dlgShelf.dataset.number;
+  if(!L || !N){ showToast('Raf harfi (A–H) ve numarası (1–50) seçin', true); return; }
+  const code=`${L}-${N}`; dlgShelf.close();
+  if(state.selectedProduct){
+    applyShelfTo(state.selectedProduct.barcode, code);
+    dlgProduct.close();
+  } else if(state.bulkItems.size){
+    for(const bc of state.bulkItems){ applyShelfTo(bc, code); }
+    state.bulkItems.clear(); bulkCount.classList.add('hidden'); bulkCount.textContent='0';
+    showToast('Toplu atama yapıldı');
+  }
+});
+
+
+/* ==== Manuel barkod alanı (kamera ile aynı akış) ==== */
+let manualTimer=null;
+function triggerManualScan(){
+  const digits = (manualInput.value||"").replace(/\D/g,"");
+  if(digits.length<12) return;
+  const val = digits.length===12 ? ('0'+digits) : digits.slice(-13);
+  handleScan(val);
+  manualInput.value="";
+}
+function onManualInputDebounced(){
+  if(manualTimer) clearTimeout(manualTimer);
+  manualTimer = setTimeout(()=>{
+    triggerManualScan();
+  }, 220);
+}
+if(manualInput){
+  manualInput.addEventListener('input', onManualInputDebounced);
+  manualInput.addEventListener('keydown', (e)=>{
+    if(e.key==='Enter'){ e.preventDefault(); triggerManualScan(); }
+  });
+}
+
+/* ==== Kamera ==== */
+let stream=null, detector=null, rafId=null, torchOn=false, track=null;
+const camBanner = document.getElementById('camBanner');
+function secureOk(){ return location.protocol==='https:' || location.hostname==='localhost' || location.hostname==='127.0.0.1'; }
+async function openCameraModal(){
+  if(!secureOk()){ alert('Kamera için HTTPS/localhost şart'); return; }
+  if(!('BarcodeDetector' in window)){ document.getElementById('scanStatus').textContent='Bu cihazda BarcodeDetector yok'; }
+  try{ detector = new BarcodeDetector({formats:['ean_13','upc_a']}); }catch{}
+  camModal.showModal();
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode:'environment' } });
+    video.srcObject = stream; track=stream.getVideoTracks()[0];
+    const caps=track.getCapabilities?.(); if(caps && 'torch' in caps) btnTorch.classList.remove('hidden'); else btnTorch.classList.add('hidden');
+    scanLoop();
+  }catch(e){ alert('Kamera açılamadı: '+(e?.message||e)); camModal.close(); }
+}
+function stopCamera(){ cancelAnimationFrame(rafId); rafId=null; if(stream) stream.getTracks().forEach(t=>t.stop()); stream=null; track=null; torchOn=false; }
+btnOpenCam.addEventListener('click', openCameraModal);
+btnCloseCam.addEventListener('click', ()=>{
+  stopCamera(); camModal.close();
+  // Kamera kapanınca toplu ürün varsa raf sor
+  if(state.bulkItems.size>0){ openShelfDialog(); }
+});
+btnTorch.addEventListener('click', async ()=>{ if(!track) return; try{ torchOn=!torchOn; await track.applyConstraints({advanced:[{torch:torchOn}]}); }catch{ showToast('Fener desteklenmiyor'); }});
+
+function showCamBanner(msg, ok=true){
+  camBanner.textContent = msg;
+  camBanner.className = ok? 'ok' : 'err';
+  camBanner.id='camBanner';
+  camBanner.style.display='block';
+  setTimeout(()=> camBanner.style.display='none', 1000);
+}
+async function scanLoop(){
+  if(!stream) return;
+  try{
+    const detections = await detector.detect(video);
+    if(detections && detections.length){
+      const now=Date.now(); if(now - state.lastScanAt > 1000){
+        state.lastScanAt = now;
+        const val = detections[0].rawValue || detections[0].rawValueText || '';
+        handleScan(val);
+      }
+    }
+  }catch{}
+  rafId = requestAnimationFrame(scanLoop);
+}
+function handleScan(value){
+  const raw=String(value).replace(/\D/g,'');
+  if(!(raw.length===12 || raw.length===13)){ showCamBanner('⛔ Okunamadı', false); feedbackERR(); return; }
+  const ean13 = raw.length===12 ? ('0'+raw) : raw;
+  document.getElementById('lastBox').textContent = ean13;
+  const r = state.byBarcode.get(ean13);
+  if(!r){ showCamBanner('⛔ ERP’de yok', false); feedbackERR(); return; }
+  feedbackOK();
+
+  if(bulkChk.checked){
+    state.bulkItems.add(r.barcode);
+    bulkCount.classList.remove('hidden'); bulkCount.textContent = String(state.bulkItems.size);
+    showCamBanner('✅ Okundu', true);
+  } else {
+    // TEKLI MOD: raf boşsa direkt adresle; varsa eskisi gibi ürün popup
+    if(!r.shelf){ state.selectedProduct = r; openShelfDialog(); }
+    else { showCamBanner('✅ Okundu', true); openProduct(r.barcode); }
+  }
+}
+
+/* ==== Kaydetme ==== */
+function buildFullWorkbook(){
+  // Başlığı garanti et
+  const shelfKey = getShelfHeader();
+  const headersOut = Array.from(new Set([...state.headers, shelfKey]));
+  const rows = state.rows.map(r=>{
+    const o = Object.assign({}, r.__raw);
+    o[shelfKey] = r.shelf || '';
+    return o;
+  });
+  // XLSX utils json_to_sheet sırayı korumayabilir; header’ı zorlayalım
+  const ws = XLSX.utils.json_to_sheet(rows, {header: headersOut, skipHeader:false});
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Veri'); return wb;
+}
+function buildChangesWorkbook(){
+  const rows=[]; for(const [bc,ch] of state.changes.entries()){
+    rows.push({ 'Barkod':bc, 'Ürün Adı':ch.name||'', 'Eski Raf':ch.oldShelf||'', 'Yeni Raf':ch.newShelf||'',
+      'Tarih/Saat':dayjs(ch.ts).format('YYYY-MM-DD HH:mm'), 'Kim Adresledi':(ch.who||whoInput.value||'') });
+  }
+  const ws=XLSX.utils.json_to_sheet(rows, {skipHeader:false});
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Değişiklikler'); return wb;
+}
+btnSaveAll.addEventListener('click', ()=>{
+  if(!state.rows.length){ showToast('Veri yok', true); return; }
+  if(!ensureWho()) { showToast('"Kim Adresledi" gerekli', true); return; }
+  for(const [bc,ch] of state.changes){ if(!ch.who) ch.who=whoInput.value.trim(); }
+  XLSX.writeFile(buildFullWorkbook(),'GuncelRaflar.xlsx');
+});
+btnSaveChanges.addEventListener('click', ()=>{
+  if(!state.rows.length){ showToast('Veri yok', true); return; }
+  if(!ensureWho()) { showToast('"Kim Adresledi" gerekli', true); return; }
+  for(const [bc,ch] of state.changes){ if(!ch.who) ch.who=whoInput.value.trim(); }
+  XLSX.writeFile(buildChangesWorkbook(),'Degisiklikler.xlsx');
+});
+
+/* ==== Eventler & init ==== */
+btnReloadSheets.addEventListener('click', loadSheetsFast);
+fileInput.addEventListener('change', (e)=>{ const f=e.target.files?.[0]; if(!f) return; handleExcel(f); });
+loadSheetsFast();
+</script>
+</body>
+</html>
