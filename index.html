@@ -296,15 +296,33 @@ function openMapForHeaders(headers, mapDraft, onApply){
 async function loadSheetsFast(){
   loadInfo.textContent="Sheets alınıyor…";
   try{
-    const res = await fetch(SHEETS_URL, {cache:'no-store'}); if(!res.ok) throw new Error('HTTP '+res.status);
-    const csv = await res.text();
-    const wb = XLSX.read(csv, {type:'string'}); const sh=wb.Sheets[wb.SheetNames[0]];
+    const u = new URL(SHEETS_URL);
+    u.searchParams.set('cb', Date.now().toString());
+    const ctrl = new AbortController();
+    const tid = setTimeout(()=>ctrl.abort(new Error('timeout')), 12000);
+
+    const res = await fetch(u.toString(), { cache:'no-store', mode:'cors', redirect:'follow', signal: ctrl.signal });
+    clearTimeout(tid);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+
+    const text = await res.text();
+    if(/<html/i.test(text.slice(0,200))) throw new Error('CSV yerine HTML döndü. "Web’e yayımla" ve herkese açık olduğundan emin olun.');
+
+    const wb = XLSX.read(text, {type:'string'});
+    const sh = wb.Sheets[wb.SheetNames[0]];
     const json = XLSX.utils.sheet_to_json(sh, {defval:'', raw:false});
     if(!json.length){ showToast('Sheets boş', true); return; }
-    const headers = Object.keys(json[0]||{}); const map = detectColumns(headers);
+
+    const headers = Object.keys(json[0]||{});
+    const map = detectColumns(headers);
     const rows2d = [headers].concat(json.map(o=> headers.map(h=> o[h])));
     indexWithHeaders(rows2d, headers, map);
-  }catch(e){ console.error(e); showToast('Sheets alınamadı', true); loadInfo.textContent="Hata"; }
+    loadInfo.textContent="Yüklendi";
+  }catch(e){
+    console.error(e);
+    showToast('Sheets alınamadı: ' + (e?.message||e), true);
+    loadInfo.textContent="Hata";
+  }
 }
 
 /* ==== Excel yükleme ==== */
