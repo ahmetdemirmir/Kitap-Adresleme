@@ -586,10 +586,7 @@ btnReloadSheets.addEventListener('click', loadSheetsFast);
 fileInput.addEventListener('change', (e)=>{ const f=e.target.files?.[0]; if(!f) return; handleExcel(f); });
 loadSheetsFast();
 </script>
-</body>
-</html>
-
-
+<script>
 /* ==== Son Kullanılanlar: güvenli tıklama ==== */
 (function(){
   const cont = document.getElementById('recentShelves');
@@ -606,3 +603,6 @@ loadSheetsFast();
     if(typeof highlightNumber==='function') highlightNumber(N);
   }, {passive:true});
 })();
+</script>
+</body>
+</html>
