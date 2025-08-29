@@ -25,6 +25,12 @@
   #overlayFrame::after{content:"";position:absolute;left:10%;right:10%;top:18%;height:64%;border:3px dashed #10b981;border-radius:1rem;box-shadow:0 0 0 9999px rgba(0,0,0,.35) inset;pointer-events:none}
 
   /* Raf seçim – büyük butonlar */
+  
+/* ==== Raf Dialog güvenli alan & sticky footer ==== */
+#dlgShelf { padding: 0; }
+#dlgShelf > div { max-height: calc(100dvh - 32px); overflow:auto; border-radius: 16px; }
+#dlgShelf .footer { position: sticky; bottom: 0; background:#fff; padding-top:8px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+
   .shelf-btn{padding:.6rem .9rem;border-radius:.75rem;background:#f1f5f9}
   .shelf-btn.active{background:#0ea5e9;color:#fff}
   .nums-wrap{max-height:180px;overflow-y:auto}
@@ -134,7 +140,7 @@
         <div id="nums" class="flex flex-wrap gap-2"></div>
       </div>
 
-      <div class="flex items-center justify-end gap-2 mt-4">
+      <div class="footer flex items-center justify-end gap-2 mt-4">
         <button id="btnShelfApply" class="px-5 py-2 rounded-xl font-medium text-white" style="background:var(--brand)">Uygula</button>
       </div>
     </div>
@@ -218,17 +224,16 @@ const state = {
 /* ==== Helpers ==== */
 function showToast(msg, persist=false){ const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block'; if(!persist){ setTimeout(()=>{ t.style.display='none'; }, 1100); } }
 function loadRecentShelves(){ try{ return JSON.parse(localStorage.getItem('recentShelves')||'[]'); }catch{ return []; } }
-function pushRecentShelf(code){ const a=loadRecentShelves(); const i=a.indexOf(code); if(i>=0) a.splice(i,1); a.unshift(code); while(a.length>5) a.pop(); localStorage.setItem('recentShelves', JSON.stringify(a)); state.lastShelves=a; }
-function toStr(v){ return v==null?"":String(v).trim(); }
-function parseDateCell(v){ if(v==null||v==="") return ""; const formats=["DD.MM.YYYY","D.M.YYYY","YYYY-MM-DD","DD/MM/YYYY","D/M/YYYY"]; for(const f of formats){ const d=dayjs(v,f,true); if(d.isValid()) return d.format("DD/MM/YYYY"); } if(typeof v==='number'){ const d=dayjs('1899-12-30').add(v,'day'); return d.format("DD/MM/YYYY"); } const d2=dayjs(v); return d2.isValid()? d2.format("DD/MM/YYYY"): String(v);}
-function pad13(bc){ const s=String(bc||"").replace(/\D/g,""); if(s.length===13) return s; if(s.length===12) return '0'+s; return s; }
-function persist(){
+function pushRecentShelf(code){
   try{
-    localStorage.setItem('rows', JSON.stringify(state.rows));
-    localStorage.setItem('changes', JSON.stringify(Array.from(state.changes.entries())));
-    localStorage.setItem('headers', JSON.stringify(state.headers));
-    localStorage.setItem('map', JSON.stringify(state.map));
-  }catch{}
+    const a = loadRecentShelves();
+    const i = a.indexOf(code);
+    if(i !== -1) a.splice(i,1);
+    a.unshift(code);
+    while(a.length > 5) a.pop();
+    localStorage.setItem('recentShelves', JSON.stringify(a));
+    state.lastShelves = a;
+  }catch(e){ console.error(e); }
 }
 function ensureWho(){
   let who = whoInput.value.trim();
@@ -394,7 +399,8 @@ function openProduct(barcode){
   document.getElementById('btnShelfChange').style.display = r.shelf? 'inline-flex':'none';
   const bGive=document.getElementById('btnGiveShelf'); if(bGive) bGive.onclick=()=> openShelfDialog();
   document.getElementById('btnShelfChange').onclick=()=> openShelfDialog();
-  document.getElementById('btnShelfOk').onclick=()=> { dlgProduct.close(); };
+  document.getElementById('btnShelfOk').onclick=()=> { dlgProduct.close();
+  try{ if(!stream && manualInput){ manualInput.focus(); manualInput.select && manualInput.select(); } }catch{} };
   dlgProduct.showModal();
 }
 
@@ -439,10 +445,12 @@ document.getElementById('btnShelfApply').addEventListener('click', ()=>{
   if(state.selectedProduct){
     applyShelfTo(state.selectedProduct.barcode, code);
     dlgProduct.close();
+  try{ if(!stream && manualInput){ manualInput.focus(); manualInput.select && manualInput.select(); } }catch{}
   } else if(state.bulkItems.size){
     for(const bc of state.bulkItems){ applyShelfTo(bc, code); }
     state.bulkItems.clear(); bulkCount.classList.add('hidden'); bulkCount.textContent='0';
     showToast('Toplu atama yapıldı');
+  try{ if(!stream && manualInput){ manualInput.focus(); manualInput.select && manualInput.select(); } }catch{}
   }
 });
 
